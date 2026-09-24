@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,13 +21,15 @@ class RegisterSheetMapperTests {
     private List<Object> header() {
         return new ArrayList<>(List.of("Nome completo", "Nome social", "CPF", "E-mail", "Rua", "Número",
                 "Bairro", "Gênero", "Escolaridade", "Situação de trabalho", "Deficiência",
-                "Curso de interesse", "Carimbo de data/hora"));
+                "Curso de interesse", "Carimbo de data/hora", "Contato com WhatsApp",
+                "O contato informado possui WhatsApp?", "Contato de familiar"));
     }
 
     private List<Object> row() {
         return new ArrayList<>(List.of("Pessoa Exemplo", "", "012.345.678-90", "pessoa@example.com",
                 "Rua Exemplo", "42", "Centro", "Feminino", "Ensino Médio Completo",
-                "Não, somente estudo", "Nenhuma", "Informática", "24/09/2026 13:45:10"));
+                "Não, somente estudo", "Nenhuma", "Informática", "24/09/2026 13:45:10",
+                "(11) 99999-0000", "Sim", "(11) 3333-0000"));
     }
 
     @Test
@@ -39,6 +42,9 @@ class RegisterSheetMapperTests {
         assertNull(register.getSocialName());
         assertEquals("01234567890", register.getCpf());
         assertEquals("pessoa@example.com", register.getEmail());
+        assertEquals("11999990000", register.getPersonalPhone());
+        assertEquals(Boolean.TRUE, register.getPersonalPhoneHasWhatsapp());
+        assertEquals("1133330000", register.getFamilyPhone());
         assertNull(register.getAddress().getId());
         assertEquals("Rua Exemplo", register.getAddress().getStreet());
         assertEquals(42, register.getAddress().getNumber());
@@ -46,7 +52,7 @@ class RegisterSheetMapperTests {
         assertEquals(Gender.FEMALE, register.getGender());
         assertEquals(Education.HIGH_SCHOOL_COMPLETE, register.getEducation());
         assertEquals(WorkState.ONLY_STUDYING, register.getWorkState());
-        assertEquals(Disabilities.NONE, register.getDisabilities());
+        assertEquals(Set.of(Disabilities.NONE), register.getDisabilities());
         assertEquals("Informática", register.getCourseOfInterest());
         assertEquals(LocalDate.of(2026, 9, 24), register.getRegisterDate());
     }
@@ -77,8 +83,41 @@ class RegisterSheetMapperTests {
     @Test
     void acceptsJavaFieldNamesAsHeaders() {
         List<Object> header = List.of("fullName", "socialName", "cpf", "email", "street", "number",
-                "neighborhood", "gender", "education", "workState", "disabilities", "courseOfInterest", "registerDate");
+                "neighborhood", "gender", "education", "workState", "disabilities", "courseOfInterest", "registerDate",
+                "personalPhone", "personalPhoneHasWhatsapp", "familyPhone");
         assertEquals(1, mapper.map(List.of(header, row()), 1).registers().size());
+    }
+
+    @Test
+    void acceptsCurrentFormHeadersAndPrefersRegistrationDateOverSubmissionTimestamp() {
+        var header = header();
+        var row = row();
+        header.set(4, "Endereço (rua)");
+        header.set(9, "Trabalha atualmente?");
+        header.add("Data da inscrição");
+        row.add("01/09/2026");
+        var result = mapper.map(List.of(header, row), 1);
+        assertTrue(result.errors().isEmpty());
+        var register = result.registers().getFirst();
+        assertEquals("Rua Exemplo", register.getAddress().getStreet());
+        assertEquals(WorkState.ONLY_STUDYING, register.getWorkState());
+        assertEquals(LocalDate.of(2026, 9, 1), register.getRegisterDate());
+
+        Collections.reverse(header);
+        Collections.reverse(row);
+        assertEquals(LocalDate.of(2026, 9, 1),
+                mapper.map(List.of(header, row), 1).registers().getFirst().getRegisterDate());
+    }
+
+    @Test
+    void doesNotReplaceInvalidExplicitRegistrationDateWithSubmissionTimestamp() {
+        var header = header();
+        var row = row();
+        header.add("Data da inscrição");
+        row.add("31/02/2026");
+        var result = mapper.map(List.of(header, row), 1);
+        assertTrue(result.registers().isEmpty());
+        assertTrue(result.errors().getFirst().message().contains("Data de cadastro"));
     }
 
     @Test
@@ -120,9 +159,12 @@ class RegisterSheetMapperTests {
 
     @Test
     void reportsTruncatedRequiredCellInsteadOfIndexError() {
+        var header = header();
         var row = row();
+        header.add(header.remove(12));
+        row.add(row.remove(12));
         row.removeLast();
-        var result = mapper.map(List.of(header(), row), 1);
+        var result = mapper.map(List.of(header, row), 1);
         assertTrue(result.registers().isEmpty());
         assertTrue(result.errors().getFirst().message().contains("Data de cadastro"));
     }
@@ -159,6 +201,126 @@ class RegisterSheetMapperTests {
             var row = row();
             row.set(5, number);
             assertTrue(mapper.map(List.of(header(), row), 1).errors().getFirst().message().contains("Número"));
+        }
+    }
+
+    @Test
+    void acceptsPersonalPhoneWithoutWhatsappAndOptionalFamilyPhone() {
+        for (Object answer : List.of("Não", "Nao", "false", false)) {
+            var row = row();
+            row.set(13, "(11) 3333-0000");
+            row.set(14, answer);
+            row.set(15, "");
+            var result = mapper.map(List.of(header(), row), 1);
+            assertTrue(result.errors().isEmpty());
+            var register = result.registers().getFirst();
+            assertEquals("1133330000", register.getPersonalPhone());
+            assertEquals(Boolean.FALSE, register.getPersonalPhoneHasWhatsapp());
+            assertNull(register.getFamilyPhone());
+        }
+    }
+
+    @Test
+    void acceptsOmittedOrTruncatedFamilyPhone() {
+        var header = header();
+        var row = row();
+        row.removeLast();
+        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getFamilyPhone());
+        header.removeLast();
+        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getFamilyPhone());
+    }
+
+    @Test
+    void normalizesBothPhoneMasksAndExplicitCountryCode() {
+        var row = row();
+        row.set(13, "+55 (11) 99999-0000");
+        row.set(14, true);
+        row.set(15, "+55 (21) 3333-0000");
+        var register = mapper.map(List.of(header(), row), 1).registers().getFirst();
+        assertEquals("11999990000", register.getPersonalPhone());
+        assertEquals(Boolean.TRUE, register.getPersonalPhoneHasWhatsapp());
+        assertEquals("2133330000", register.getFamilyPhone());
+    }
+
+    @Test
+    void rejectsMissingPersonalPhoneEvenWithoutWhatsappAndInvalidPhoneFormats() {
+        for (String phone : List.of("", "99999-0000", "(11) telefone", "119999900001", "+1 11999990000", "01 99999-0000")) {
+            var row = row();
+            row.set(13, phone);
+            row.set(14, "Não");
+            var result = mapper.map(List.of(header(), row), 1);
+            assertTrue(result.registers().isEmpty());
+            assertTrue(result.errors().getFirst().message().contains("Telefone pessoal"));
+        }
+        var row = row();
+        row.set(15, "3333-0000");
+        var result = mapper.map(List.of(header(), row), 1);
+        assertTrue(result.registers().isEmpty());
+        assertTrue(result.errors().getFirst().message().contains("Contato de familiar"));
+    }
+
+    @Test
+    void rejectsMissingOrUnknownWhatsappAnswerInsteadOfAssumingFalse() {
+        for (String answer : List.of("", "talvez")) {
+            var row = row();
+            row.set(14, answer);
+            var result = mapper.map(List.of(header(), row), 1);
+            assertTrue(result.registers().isEmpty());
+            assertTrue(result.errors().getFirst().message().contains("WhatsApp"));
+        }
+        var missingWhatsappHeader = header();
+        missingWhatsappHeader.remove(14);
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> mapper.map(List.of(missingWhatsappHeader), 1)).getMessage().contains("WhatsApp"));
+        var missingPhoneHeader = header();
+        missingPhoneHeader.remove(13);
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> mapper.map(List.of(missingPhoneHeader), 1)).getMessage().contains("Telefone pessoal"));
+    }
+
+    @Test
+    void acceptsMultipleDisabilitiesByDescriptionNameOrCode() {
+        for (String value : List.of("Auditiva, Visual", "HEARING;VISUAL", "1, 4", "Auditiva\nVisual", "Auditiva\r\nVisual")) {
+            var row = row();
+            row.set(10, value);
+            var result = mapper.map(List.of(header(), row), 1);
+            assertTrue(result.errors().isEmpty(), value);
+            assertEquals(Set.of(Disabilities.HEARING, Disabilities.VISUAL),
+                    result.registers().getFirst().getDisabilities());
+        }
+    }
+
+    @Test
+    void deduplicatesDisabilitiesAndKeepsMotorDescriptionIntact() {
+        var row = row();
+        row.set(10, "Intelectual, Auditiva, HEARING, 1, Física/Motora");
+        var result = mapper.map(List.of(header(), row), 1);
+        assertTrue(result.errors().isEmpty());
+        assertEquals(Set.of(Disabilities.INTELLECTUAL, Disabilities.HEARING, Disabilities.MOTOR),
+                result.registers().getFirst().getDisabilities());
+    }
+
+    @Test
+    void acceptsEachSingleDisabilityIncludingNoDeclaration() {
+        for (Disabilities disability : Disabilities.values()) {
+            var row = row();
+            row.set(10, disability.getDescription());
+            assertEquals(Set.of(disability), mapper.map(List.of(header(), row), 1)
+                    .registers().getFirst().getDisabilities());
+        }
+    }
+
+    @Test
+    void rejectsConflictingUnknownOrRemovedDisabilitiesWithoutImportingPartialRow() {
+        for (String value : List.of("Nenhuma, Visual", "Sem Declaração, Auditiva", "Nenhuma, Sem Declaração",
+                "Auditiva, desconhecida", "Múltiplas", "MULTIPLE", "2", "Auditiva,", "", "Auditiva;;Visual")) {
+            var row = row();
+            row.set(10, value);
+            var result = mapper.map(List.of(header(), row, row()), 1);
+            assertEquals(1, result.registers().size(), value);
+            assertEquals(1, result.errors().size(), value);
+            assertEquals(2, result.errors().getFirst().row());
+            assertTrue(result.errors().getFirst().message().contains("Deficiência"));
         }
     }
 

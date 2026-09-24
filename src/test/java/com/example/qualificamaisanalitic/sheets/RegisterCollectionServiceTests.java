@@ -35,7 +35,9 @@ class RegisterCollectionServiceTests {
 
     @Test
     void rejectsMissingSpreadsheetIdBeforeStartingAuthorization() {
-        var reader = new GoogleSheetsReader(new SheetsProperties());
+        var properties = new SheetsProperties();
+        properties.setSpreadsheetId("");
+        var reader = new GoogleSheetsReader(properties);
         assertThrows(IllegalArgumentException.class, reader::read);
     }
 }

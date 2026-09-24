@@ -1,0 +1,16 @@
+# Copie para src/main/resources/application.properties e preencha apenas no arquivo local.
+spring.application.name=qualificaMaisAnalitic
+spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/qualificamais}
+spring.datasource.username=${DB_USERNAME:}
+spring.datasource.password=${DB_PASSWORD:}
+
+app.sheets.spreadsheet-id=${GOOGLE_SHEETS_SPREADSHEET_ID:}
+app.sheets.range=${GOOGLE_SHEETS_RANGE:}
+app.sheets.header-row=1
+app.sheets.credentials-path=classpath:credentials.json
+app.sheets.tokens-directory=tokens
+app.sheets.oauth-port=8888
+
+app.sheets.check-enabled=${GOOGLE_SHEETS_CHECK_ENABLED:true}
+app.sheets.check-interval=${GOOGLE_SHEETS_CHECK_INTERVAL:5m}
+app.sheets.check-initial-delay=${GOOGLE_SHEETS_CHECK_INITIAL_DELAY:10s}

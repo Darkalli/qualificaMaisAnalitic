@@ -3,7 +3,7 @@ package com.example.qualificamaisanalitic;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+@SpringBootTest(properties = "app.sheets.check-enabled=false")
 class QualificaMaisAnaliticApplicationTests {
 
     @Test
