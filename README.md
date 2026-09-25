@@ -1,18 +1,59 @@
 # Qualifica Mais Analitic
 
-Coleta de cadastros do Google Sheets usando os campos de `Register` e `Address`.
+Coleta e persistência de cadastros do Google Sheets no PostgreSQL usando os campos de `Register` e `Address`.
 
 ## Estrutura
 
 - `GoogleSheetsReader`: autentica com OAuth e lê a planilha com acesso somente de leitura.
 - `RegisterSheetMapper`: identifica as colunas pelo cabeçalho e converte cada linha em `Register`, incluindo `Address`.
 - `RegisterCollectionService.collect()`: coordena a leitura e retorna `SheetImportResult`.
-- `RegisterCollectionScheduler`: executa a checagem periódica e registra o resumo e os erros no log.
+- `RegisterImportService.importRegisters()`: coleta a planilha e encaminha as linhas válidas para persistência.
+- `RegisterPersistenceService`: grava o lote em uma transação, identifica CPF repetido e relata divergências.
+- `RegisterRepository`: permite consultar cadastros por ID ou CPF normalizado.
+- `RegisterCollectionScheduler`: executa a importação periódica e registra o resumo, as divergências e os erros no log.
 - `SheetImportResult`: contém `registers` válidos, `errors` com o número da linha e a primeira falha encontrada nela, e `ignoredRows` para linhas vazias.
 - `SheetsProperties`: recebe a configuração local da coleta, compartilhada pelo Spring e pelo Quickstart.
 - `SheetsQuickstart`: permite executar a coleta pela IDE sem iniciar o Spring/PostgreSQL.
 
-A coleta retorna objetos em memória. Ainda não salva no banco nem remove duplicados. Os IDs de `Register` e `Address` permanecem nulos para uma futura camada de persistência.
+A chamada `collect()` e o Quickstart continuam retornando objetos em memória, sem gravar. A chamada `importRegisters()` e o agendamento gravam no banco. Os IDs de `Register` e `Address` são gerados pelo banco ao inserir.
+
+## Persistência e regra inicial de reimportação
+
+**Hipótese provisória, pendente de confirmação com o setor:** existe um cadastro por CPF normalizado. Se a mesma pessoa puder ter várias inscrições, esta chave precisa mudar antes de usar a importação nessa rotina; curso e data diferentes são tratados como divergência, não como uma nova inscrição.
+
+| Situação | Comportamento implementado |
+| --- | --- |
+| CPF ainda não cadastrado | Insere cadastro, endereço e deficiências juntos. |
+| Mesmo CPF e mesmos dados | Mantém o registro e contabiliza como sem alteração. |
+| Mesmo CPF com campos diferentes | Preserva os valores do banco e relata o ID do cadastro e os nomes dos campos divergentes, sem seus valores. |
+| CPF repetido no mesmo lote | A primeira linha válida é inserida; as seguintes são comparadas com ela. |
+| Linha corrigida na planilha | Se antes era inválida e o CPF ainda não existe, insere; se o CPF já existe, aplica a comparação acima. |
+| CPF corrigido para outro número | É considerado outra identidade e pode gerar novo cadastro; ainda não há vínculo estável com a inscrição da origem para reconciliar essa correção. |
+| Linha removida da planilha | Não exclui o cadastro do banco. |
+| Edição no JavaFX | Ainda não implementada. A reimportação preserva valores já existentes no banco. |
+
+Após a primeira gravação, o banco prevalece sobre a planilha. Divergências ficam no resultado da importação e no log; ainda não existe tela de resolução nem histórico persistido desses conflitos. A restrição `uk_register_cpf` também impede duplicatas no banco. A ordem das linhas não é usada como identidade.
+
+Linhas inválidas são excluídas pelo mapper e continuam no relatório. As linhas válidas são gravadas em uma única transação: se qualquer gravação falhar, o lote inteiro é revertido, incluindo endereços e deficiências. Não há gravação parcial desse lote. Se duas instâncias tentarem inserir o mesmo CPF simultaneamente, a restrição única pode reverter um dos lotes; a próxima execução relê a planilha e compara os registros já gravados.
+
+O serviço de persistência recebe objetos novos, com CPF normalizado e sem IDs, produzidos pelo mapper. Ele não substitui a validação de um futuro formulário JavaFX. A consulta por CPF espera os 11 dígitos, sem máscara.
+
+### Preparar o PostgreSQL
+
+Crie o banco e configure seu acesso no `application.properties` local. O usuário do banco precisa poder criar as tabelas e sequências no schema utilizado. Ao iniciar o Spring, o Flyway executa `src/main/resources/db/migration/V1__create_register_tables.sql` em um schema vazio, criando `register`, `address` e `register_disabilities`. O Hibernate valida a estrutura (`ddl-auto=validate`); não use `create` ou `create-drop` no banco de trabalho.
+
+A configuração compartilhada fica em `src/main/resources/application.yaml`; as credenciais continuam no `.properties` local. Todos os enums são persistidos pelo nome. Cadastro e endereço têm IDs automáticos, os campos obrigatórios têm restrições `NOT NULL` e o endereço é gravado por cascata junto ao cadastro.
+
+**Banco com tabelas antigas:** esta primeira migração cria a estrutura inicial; não converte automaticamente tabelas anteriores, IDs manuais ou enums numéricos. O Flyway recusa um schema não vazio sem histórico de migração. Para esse caso, é necessário preparar uma migração específica para a estrutura e os dados existentes. Não habilite `baseline-on-migrate` apenas para contornar esse erro.
+
+Para importar usando outro componente Spring, injete `RegisterImportService`:
+
+```java
+RegisterImportResult result = registerImportService.importRegisters();
+// result.inserted(), result.unchanged(), result.conflicts(), result.errors(), result.ignoredRows()
+```
+
+As mensagens de erro SQL do Hibernate são desativadas na configuração padrão porque podem conter CPF e outros valores pessoais. O agendamento informa a classe da falha e tenta novamente no ciclo seguinte.
 
 ## Cabeçalho da planilha
 
@@ -43,11 +84,11 @@ O formulário também pode usar `Endereço (rua)`, `Trabalha atualmente?` e `Dat
 
 Os telefones são armazenados como texto com DDD, apenas com os 10 ou 11 dígitos nacionais. A coleta aceita máscaras como `(11) 99999-0000` e o prefixo explícito `+55`. A validação confere o formato, sem verificar se o número existe. O telefone pessoal é obrigatório mesmo quando a resposta sobre WhatsApp é `Não`; essa resposta é armazenada separadamente como `false`. O telefone de familiar vazio fica `null` e não recebe a indicação de WhatsApp do telefone pessoal. Na planilha, adicione as novas colunas usando os títulos acima; também é aceito `Telefone pessoal` no lugar de `Contato com WhatsApp`.
 
-Exemplos de enums: `Feminino`, `FEMALE` ou `1`; `Ensino Médio Completo`, `HIGH_SCHOOL_COMPLETE` ou `5`; `Não, somente estudo` ou `7`; `Nenhuma` ou `6`. A lista completa está em `src/main/java/com/enums`.
+Exemplos de enums: `Feminino`, `FEMALE` ou `1`; `Ensino Médio Completo`, `HIGH_SCHOOL_COMPLETE` ou `5`; `Não, somente estudo` ou `7`; `Nenhuma` ou `6`. A lista completa está em `src/main/java/com/sheets/enums`.
 
 As deficiências são um `Set<Disabilities>`, sem duplicatas. Exemplos de célula: `Auditiva, Visual`, `Intelectual; Física/Motora` ou `1, 4`. `Nenhuma` e `Sem Declaração` devem aparecer isoladamente. A opção `Múltiplas` foi removida: informe as deficiências específicas. Um item desconhecido invalida a linha inteira, sem descartar silenciosamente parte da resposta.
 
-O mapeamento JPA usa a tabela `register_disabilities`, com `register_id` e `disability`, guardando o nome de cada enum. A combinação das duas colunas é única. O uso de `@ElementCollection` com `@Enumerated(EnumType.STRING)` segue a [documentação de Jakarta Persistence](https://jakarta.ee/specifications/platform/9.1/apidocs/jakarta/persistence/enumerated.html). Se houver dados persistidos no antigo campo único, a migração para essa tabela deve ser feita antes de usar a nova estrutura no banco; a coleta continua retornando os cadastros em memória.
+O mapeamento JPA usa a tabela `register_disabilities`, com `register_id` e `disability`, guardando o nome de cada enum. A combinação das duas colunas é única. O uso de `@ElementCollection` com `@Enumerated(EnumType.STRING)` segue a [documentação de Jakarta Persistence](https://jakarta.ee/specifications/platform/9.1/apidocs/jakarta/persistence/enumerated.html). Se houver dados persistidos no antigo campo único, a migração para essa tabela deve ser feita antes de usar a nova estrutura no banco.
 
 Formate a coluna CPF como texto no Sheets para preservar zeros à esquerda. A coleta valida o formato e remove a máscara; não verifica os dígitos verificadores. O número do endereço segue o `int` do modelo atual, portanto `s/n` e `12A` geram erro. A data/hora é convertida para `LocalDate`, descartando o horário.
 
@@ -112,16 +153,26 @@ O padrão faz a primeira checagem após 10 segundos e espera 5 minutos após o f
 
 O arquivo já oferece as variáveis `GOOGLE_SHEETS_CHECK_ENABLED`, `GOOGLE_SHEETS_CHECK_INTERVAL` e `GOOGLE_SHEETS_CHECK_INITIAL_DELAY` como alternativa à edição. Reinicie a aplicação após mudar os valores. Use `app.sheets.check-enabled=false` para desativar a rotina. ID e intervalo de células também ficam no `application.properties` local.
 
-Cada ciclo relê todo o intervalo da planilha e registra quantidades e erros por linha. Falhas de leitura são registradas, e o próximo ciclo tenta novamente. A checagem ainda não grava os cadastros no banco nem detecta apenas linhas novas. A aplicação usa o PostgreSQL configurado durante a inicialização; a autorização Google ocorre na primeira coleta, reutilizando os tokens existentes. Para a primeira autorização, execute o Quickstart e conclua o fluxo no navegador antes de deixar a rotina rodando sem interação.
+Cada ciclo relê todo o intervalo, insere os CPFs novos e compara os já existentes, registrando as quantidades, divergências e erros por linha. Falhas de leitura ou persistência são registradas, e o próximo ciclo tenta novamente. A aplicação usa o PostgreSQL configurado durante a inicialização; a autorização Google ocorre na primeira coleta, reutilizando os tokens existentes. Para a primeira autorização, execute o Quickstart e conclua o fluxo no navegador antes de deixar a rotina rodando sem interação.
 
 ## Testes
 
 ```powershell
-.\mvnw.cmd test "-Dtest=RegisterSheetMapperTests,RegisterCollectionServiceTests"
+.\mvnw.cmd test
 ```
 
-Esses testes não precisam de Google ou PostgreSQL. O teste de contexto Spring já existente depende da configuração do banco.
+Os testes usam dados fictícios e não acessam o Google nem o PostgreSQL configurado no arquivo local. O perfil `test` usa H2 em memória e executa a mesma migração Flyway da aplicação, com validação do schema pelo Hibernate.
 
 `RegisterDisabilitiesPersistenceTests` valida a gravação, leitura e atualização de várias deficiências em um banco H2 em memória, isolado do PostgreSQL configurado. Execute-o com `.\mvnw.cmd test "-Dtest=RegisterDisabilitiesPersistenceTests"`.
+
+`RegisterPersistenceTests` cobre gravação completa, IDs automáticos, CPF com zero inicial, reimportação e reordenação, divergências, rollback do lote, unicidade no banco e ausência de CPF nos logs de falha SQL. `RegisterImportServiceTests` cobre a ligação entre coleta e persistência.
+
+Também é possível executar a suíte em um **banco PostgreSQL exclusivo para testes**, já criado e inicialmente vazio. Os testes apagam os registros de suas tabelas entre casos; nunca indique um banco de trabalho:
+
+```powershell
+.\mvnw.cmd test "-Dtest.db.url=jdbc:postgresql://127.0.0.1:55439/persistence_tests" "-Dtest.db.driver=org.postgresql.Driver" "-Dtest.db.username=persistence_test"
+```
+
+Se necessário, forneça a senha de teste pela variável de ambiente `TEST_DB_PASSWORD`. As demais substituições são `test.db.url`, `test.db.driver` e `test.db.username`.
 
 A leitura usa `ROWS` e `FORMATTED_VALUE`, incluindo tratamento das células finais vazias que a API omite, conforme a [documentação de leitura do Google Sheets](https://developers.google.com/workspace/sheets/api/guides/values).

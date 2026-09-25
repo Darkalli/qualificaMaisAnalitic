@@ -1,9 +1,10 @@
 package com.example.qualificamaisanalitic.sheets;
 
 import com.sheets.RegisterCollectionScheduler;
-import com.sheets.RegisterCollectionService;
+import com.sheets.services.RegisterImportService;
+import com.sheets.RegisterImportResult;
 import com.sheets.SheetImportResult;
-import com.sheets.SheetsConfiguration;
+import com.sheets.config.SheetsConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
@@ -20,10 +21,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class RegisterCollectionSchedulerTests {
-    private final RegisterCollectionService service = mock(RegisterCollectionService.class);
+    private final RegisterImportService service = mock(RegisterImportService.class);
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(SheetsConfiguration.class, RegisterCollectionScheduler.class)
-            .withBean(RegisterCollectionService.class, () -> service);
+            .withBean(RegisterImportService.class, () -> service);
 
     @Test
     void usesConfiguredDelayBetweenChecksAndBeforeFirstCheck() {
@@ -53,13 +54,13 @@ class RegisterCollectionSchedulerTests {
     void repeatsChecksEvenAfterReadFailure() throws Exception {
         var attempts = new AtomicInteger();
         var completed = new CountDownLatch(3);
-        when(service.collect()).thenAnswer(invocation -> {
+        when(service.importRegisters()).thenAnswer(invocation -> {
             int attempt = attempts.incrementAndGet();
             completed.countDown();
             if (attempt == 1) {
                 throw new IOException("Falha de rede simulada");
             }
-            return new SheetImportResult(List.of(), List.of(new SheetImportResult.RowError(2, "CPF inválido")), 0);
+            return new RegisterImportResult(0, 0, List.of(), List.of(new SheetImportResult.RowError(2, "CPF inválido")), 0);
         });
         contextRunner.withPropertyValues("app.sheets.check-interval=30ms", "app.sheets.check-initial-delay=0s")
                 .run(context -> {

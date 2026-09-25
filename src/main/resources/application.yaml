@@ -1,0 +1,11 @@
+# Configuração compartilhada; credenciais continuam no application.properties local.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    clean-disabled: true
+# O relatório da importação registra a classe da falha; mensagens SQL podem conter dados pessoais.
+logging:
+  level:
+    org.hibernate.orm.jdbc.error: OFF

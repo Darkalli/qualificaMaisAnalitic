@@ -9,6 +9,7 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import com.sheets.config.SheetsProperties;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.stereotype.Component;
 

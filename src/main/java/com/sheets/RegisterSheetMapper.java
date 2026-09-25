@@ -1,11 +1,11 @@
 package com.sheets;
 
-import com.entities.Address;
-import com.entities.Register;
-import com.enums.Disabilities;
-import com.enums.Education;
-import com.enums.Gender;
-import com.enums.WorkState;
+import com.sheets.entities.Address;
+import com.sheets.entities.Register;
+import com.sheets.enums.Disabilities;
+import com.sheets.enums.Education;
+import com.sheets.enums.Gender;
+import com.sheets.enums.WorkState;
 import org.springframework.stereotype.Component;
 
 import java.text.Normalizer;

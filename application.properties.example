@@ -3,6 +3,9 @@ spring.application.name=qualificaMaisAnalitic
 spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/qualificamais}
 spring.datasource.username=${DB_USERNAME:}
 spring.datasource.password=${DB_PASSWORD:}
+# Flyway cria as tabelas em um schema vazio; Hibernate apenas valida a estrutura.
+spring.jpa.hibernate.ddl-auto=validate
+spring.flyway.clean-disabled=true
 
 app.sheets.spreadsheet-id=${GOOGLE_SHEETS_SPREADSHEET_ID:}
 app.sheets.range=${GOOGLE_SHEETS_RANGE:}

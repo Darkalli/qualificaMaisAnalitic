@@ -1,4 +1,4 @@
-package com.enums;
+package com.sheets.enums;
 
 public enum WorkState {
 

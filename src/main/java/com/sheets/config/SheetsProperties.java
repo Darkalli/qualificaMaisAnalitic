@@ -1,4 +1,4 @@
-package com.sheets;
+package com.sheets.config;
 
 import lombok.Getter;
 import lombok.Setter;

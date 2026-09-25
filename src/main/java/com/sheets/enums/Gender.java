@@ -1,6 +1,4 @@
-package com.enums;
-
-import lombok.Getter;
+package com.sheets.enums;
 
 public enum Gender {
 

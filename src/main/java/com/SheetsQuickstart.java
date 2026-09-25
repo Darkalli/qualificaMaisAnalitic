@@ -1,9 +1,9 @@
 package com;
 
 import com.sheets.GoogleSheetsReader;
-import com.sheets.RegisterCollectionService;
+import com.sheets.services.RegisterCollectionService;
 import com.sheets.RegisterSheetMapper;
-import com.sheets.SheetsProperties;
+import com.sheets.config.SheetsProperties;
 import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcessor;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.ConfigurableEnvironment;

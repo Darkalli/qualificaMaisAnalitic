@@ -1,9 +1,9 @@
 package com.example.qualificamaisanalitic.sheets;
 
-import com.enums.Disabilities;
-import com.enums.Education;
-import com.enums.Gender;
-import com.enums.WorkState;
+import com.sheets.enums.Disabilities;
+import com.sheets.enums.Education;
+import com.sheets.enums.Gender;
+import com.sheets.enums.WorkState;
 import com.sheets.RegisterSheetMapper;
 import org.junit.jupiter.api.Test;
 
