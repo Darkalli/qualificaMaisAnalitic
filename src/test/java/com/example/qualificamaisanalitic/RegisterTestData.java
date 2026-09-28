@@ -1,7 +1,7 @@
 package com.example.qualificamaisanalitic;
 
 import com.sheets.RegisterSheetMapper;
-import com.sheets.entities.Register;
+import com.entities.Register;
 import java.util.List;
 
 public final class RegisterTestData {

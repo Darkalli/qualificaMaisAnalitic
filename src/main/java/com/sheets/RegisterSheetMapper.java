@@ -1,11 +1,12 @@
 package com.sheets;
 
-import com.sheets.entities.Address;
-import com.sheets.entities.Register;
-import com.sheets.enums.Disabilities;
-import com.sheets.enums.Education;
-import com.sheets.enums.Gender;
-import com.sheets.enums.WorkState;
+import com.entities.Address;
+import com.entities.Person;
+import com.entities.Register;
+import com.enums.Disabilities;
+import com.enums.Education;
+import com.enums.Gender;
+import com.enums.WorkState;
 import org.springframework.stereotype.Component;
 
 import java.text.Normalizer;
@@ -96,17 +97,19 @@ public class RegisterSheetMapper {
 
     private Register readRegister(List<Object> row, Map<Column, Integer> columns) {
         var register = new Register();
-        register.setFullName(cell(row, columns, Column.FULL_NAME));
-        register.setSocialName(cell(row, columns, Column.SOCIAL_NAME));
+        var person = new Person();
+
+        person.setFullName(cell(row, columns, Column.FULL_NAME));
+        person.setSocialName(cell(row, columns, Column.SOCIAL_NAME));
         String cpf = cell(row, columns, Column.CPF);
         if (!cpf.matches("[0-9]{11}|[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}")) {
             throw new IllegalArgumentException("CPF: informe 11 dígitos, com ou sem a máscara 000.000.000-00.");
         }
-        register.setCpf(cpf.replaceAll("[.-]", ""));
-        register.setEmail(cell(row, columns, Column.EMAIL));
-        register.setPersonalPhone(phone(cell(row, columns, Column.PERSONAL_PHONE), Column.PERSONAL_PHONE));
-        register.setPersonalPhoneHasWhatsapp(whatsapp(cell(row, columns, Column.PERSONAL_PHONE_HAS_WHATSAPP)));
-        register.setFamilyPhone(phone(cell(row, columns, Column.FAMILY_PHONE), Column.FAMILY_PHONE));
+        person.setCpf(cpf.replaceAll("[.-]", ""));
+        person.setEmail(cell(row, columns, Column.EMAIL));
+        person.setPersonalPhone(phone(cell(row, columns, Column.PERSONAL_PHONE), Column.PERSONAL_PHONE));
+        person.setPersonalPhoneHasWhatsapp(whatsapp(cell(row, columns, Column.PERSONAL_PHONE_HAS_WHATSAPP)));
+        person.setFamilyPhone(phone(cell(row, columns, Column.FAMILY_PHONE), Column.FAMILY_PHONE));
         var address = new Address();
         address.setStreet(cell(row, columns, Column.STREET));
         address.setNeighborhood(cell(row, columns, Column.NEIGHBORHOOD));
@@ -119,14 +122,16 @@ public class RegisterSheetMapper {
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("Número: informe um inteiro não negativo.");
         }
-        register.setAddress(address);
-        register.setGender(enumValue(cell(row, columns, Column.GENDER), Gender.values(),
+        person.setAddress(address);
+        person.setGender(enumValue(cell(row, columns, Column.GENDER), Gender.values(),
                 Gender::getCode, Gender::getDescription, Column.GENDER));
-        register.setEducation(enumValue(cell(row, columns, Column.EDUCATION), Education.values(),
+        person.setEducation(enumValue(cell(row, columns, Column.EDUCATION), Education.values(),
                 Education::getCode, Education::getDescription, Column.EDUCATION));
-        register.setWorkState(enumValue(cell(row, columns, Column.WORK_STATE), WorkState.values(),
+        person.setWorkState(enumValue(cell(row, columns, Column.WORK_STATE), WorkState.values(),
                 WorkState::getCode, WorkState::getDescription, Column.WORK_STATE));
-        register.setDisabilities(disabilities(cell(row, columns, Column.DISABILITIES)));
+        person.setDisabilities(disabilities(cell(row, columns, Column.DISABILITIES)));
+
+        register.setPerson(person);
         register.setCourseOfInterest(cell(row, columns, Column.COURSE));
         register.setRegisterDate(date(cell(row, columns, Column.REGISTER_DATE)));
         return register;

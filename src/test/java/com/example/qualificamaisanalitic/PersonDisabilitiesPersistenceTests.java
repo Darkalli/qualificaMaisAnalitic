@@ -1,7 +1,7 @@
 package com.example.qualificamaisanalitic;
 
-import com.sheets.entities.Register;
-import com.sheets.enums.Disabilities;
+import com.entities.Person;
+import com.enums.Disabilities;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,23 +17,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-class RegisterDisabilitiesPersistenceTests {
+class PersonDisabilitiesPersistenceTests {
     @Autowired
     private EntityManager entityManager;
 
     @Test
     void savesLoadsAndUpdatesMultipleDisabilitiesByEnumName() {
-        var register = RegisterTestData.register("01234567890");
-        register.setDisabilities(EnumSet.of(Disabilities.HEARING, Disabilities.VISUAL));
-        entityManager.persist(register);
+        var person = PersonTestData.person("01234567890");
+        person.setDisabilities(EnumSet.of(Disabilities.HEARING, Disabilities.VISUAL));
+        entityManager.persist(person);
         entityManager.flush();
-        Long id = register.getId();
+        Long id = person.getId();
         entityManager.clear();
 
-        var saved = entityManager.find(Register.class, id);
+        var saved = entityManager.find(Person.class, id);
         assertEquals(Set.of(Disabilities.HEARING, Disabilities.VISUAL), saved.getDisabilities());
         assertEquals(Set.of("HEARING", "VISUAL"), Set.copyOf(entityManager.createNativeQuery(
-                "select disability from register_disabilities where register_id = :id", String.class)
+                "select disability from person_disabilities where person_id = :id", String.class)
                 .setParameter("id", id).getResultList()));
 
         saved.getDisabilities().remove(Disabilities.HEARING);
@@ -42,6 +42,6 @@ class RegisterDisabilitiesPersistenceTests {
         entityManager.flush();
         entityManager.clear();
         assertEquals(Set.of(Disabilities.MOTOR, Disabilities.VISUAL),
-                entityManager.find(Register.class, id).getDisabilities());
+                entityManager.find(Person.class, id).getDisabilities());
     }
 }

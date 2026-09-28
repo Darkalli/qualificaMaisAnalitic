@@ -1,9 +1,9 @@
 package com.example.qualificamaisanalitic.sheets;
 
-import com.sheets.enums.Disabilities;
-import com.sheets.enums.Education;
-import com.sheets.enums.Gender;
-import com.sheets.enums.WorkState;
+import com.enums.Disabilities;
+import com.enums.Education;
+import com.enums.Gender;
+import com.enums.WorkState;
 import com.sheets.RegisterSheetMapper;
 import org.junit.jupiter.api.Test;
 
@@ -38,21 +38,23 @@ class RegisterSheetMapperTests {
         assertTrue(result.errors().isEmpty());
         var register = result.registers().getFirst();
         assertNull(register.getId());
-        assertEquals("Pessoa Exemplo", register.getFullName());
-        assertNull(register.getSocialName());
-        assertEquals("01234567890", register.getCpf());
-        assertEquals("pessoa@example.com", register.getEmail());
-        assertEquals("11999990000", register.getPersonalPhone());
-        assertEquals(Boolean.TRUE, register.getPersonalPhoneHasWhatsapp());
-        assertEquals("1133330000", register.getFamilyPhone());
-        assertNull(register.getAddress().getId());
-        assertEquals("Rua Exemplo", register.getAddress().getStreet());
-        assertEquals(42, register.getAddress().getNumber());
-        assertEquals("Centro", register.getAddress().getNeighborhood());
-        assertEquals(Gender.FEMALE, register.getGender());
-        assertEquals(Education.HIGH_SCHOOL_COMPLETE, register.getEducation());
-        assertEquals(WorkState.ONLY_STUDYING, register.getWorkState());
-        assertEquals(Set.of(Disabilities.NONE), register.getDisabilities());
+        assertNotNull(register.getPerson());
+        assertNull(register.getPerson().getId());
+        assertEquals("Pessoa Exemplo", register.getPerson().getFullName());
+        assertNull(register.getPerson().getSocialName());
+        assertEquals("01234567890", register.getPerson().getCpf());
+        assertEquals("pessoa@example.com", register.getPerson().getEmail());
+        assertEquals("11999990000", register.getPerson().getPersonalPhone());
+        assertEquals(Boolean.TRUE, register.getPerson().getPersonalPhoneHasWhatsapp());
+        assertEquals("1133330000", register.getPerson().getFamilyPhone());
+        assertNull(register.getPerson().getAddress().getId());
+        assertEquals("Rua Exemplo", register.getPerson().getAddress().getStreet());
+        assertEquals(42, register.getPerson().getAddress().getNumber());
+        assertEquals("Centro", register.getPerson().getAddress().getNeighborhood());
+        assertEquals(Gender.FEMALE, register.getPerson().getGender());
+        assertEquals(Education.HIGH_SCHOOL_COMPLETE, register.getPerson().getEducation());
+        assertEquals(WorkState.ONLY_STUDYING, register.getPerson().getWorkState());
+        assertEquals(Set.of(Disabilities.NONE), register.getPerson().getDisabilities());
         assertEquals("Informática", register.getCourseOfInterest());
         assertEquals(LocalDate.of(2026, 9, 24), register.getRegisterDate());
     }
@@ -66,7 +68,7 @@ class RegisterSheetMapperTests {
         header.add("Observações");
         row.add("Informação adicional");
         var result = mapper.map(List.of(header, row), 1);
-        assertEquals("Pessoa Exemplo", result.registers().getFirst().getFullName());
+        assertEquals("Pessoa Exemplo", result.registers().getFirst().getPerson().getFullName());
         assertTrue(result.errors().isEmpty());
     }
 
@@ -99,8 +101,8 @@ class RegisterSheetMapperTests {
         var result = mapper.map(List.of(header, row), 1);
         assertTrue(result.errors().isEmpty());
         var register = result.registers().getFirst();
-        assertEquals("Rua Exemplo", register.getAddress().getStreet());
-        assertEquals(WorkState.ONLY_STUDYING, register.getWorkState());
+        assertEquals("Rua Exemplo", register.getPerson().getAddress().getStreet());
+        assertEquals(WorkState.ONLY_STUDYING, register.getPerson().getWorkState());
         assertEquals(LocalDate.of(2026, 9, 1), register.getRegisterDate());
 
         Collections.reverse(header);
@@ -126,11 +128,11 @@ class RegisterSheetMapperTests {
         var row = row();
         header.remove(1);
         row.remove(1);
-        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getSocialName());
+        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getPerson().getSocialName());
         header.add("Nome social");
-        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getSocialName());
+        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getPerson().getSocialName());
         row.add("Nome escolhido");
-        assertEquals("Nome escolhido", mapper.map(List.of(header, row), 1).registers().getFirst().getSocialName());
+        assertEquals("Nome escolhido", mapper.map(List.of(header, row), 1).registers().getFirst().getPerson().getSocialName());
     }
 
     @Test
@@ -214,9 +216,9 @@ class RegisterSheetMapperTests {
             var result = mapper.map(List.of(header(), row), 1);
             assertTrue(result.errors().isEmpty());
             var register = result.registers().getFirst();
-            assertEquals("1133330000", register.getPersonalPhone());
-            assertEquals(Boolean.FALSE, register.getPersonalPhoneHasWhatsapp());
-            assertNull(register.getFamilyPhone());
+            assertEquals("1133330000", register.getPerson().getPersonalPhone());
+            assertEquals(Boolean.FALSE, register.getPerson().getPersonalPhoneHasWhatsapp());
+            assertNull(register.getPerson().getFamilyPhone());
         }
     }
 
@@ -225,9 +227,9 @@ class RegisterSheetMapperTests {
         var header = header();
         var row = row();
         row.removeLast();
-        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getFamilyPhone());
+        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getPerson().getFamilyPhone());
         header.removeLast();
-        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getFamilyPhone());
+        assertNull(mapper.map(List.of(header, row), 1).registers().getFirst().getPerson().getFamilyPhone());
     }
 
     @Test
@@ -237,9 +239,9 @@ class RegisterSheetMapperTests {
         row.set(14, true);
         row.set(15, "+55 (21) 3333-0000");
         var register = mapper.map(List.of(header(), row), 1).registers().getFirst();
-        assertEquals("11999990000", register.getPersonalPhone());
-        assertEquals(Boolean.TRUE, register.getPersonalPhoneHasWhatsapp());
-        assertEquals("2133330000", register.getFamilyPhone());
+        assertEquals("11999990000", register.getPerson().getPersonalPhone());
+        assertEquals(Boolean.TRUE, register.getPerson().getPersonalPhoneHasWhatsapp());
+        assertEquals("2133330000", register.getPerson().getFamilyPhone());
     }
 
     @Test
@@ -286,7 +288,7 @@ class RegisterSheetMapperTests {
             var result = mapper.map(List.of(header(), row), 1);
             assertTrue(result.errors().isEmpty(), value);
             assertEquals(Set.of(Disabilities.HEARING, Disabilities.VISUAL),
-                    result.registers().getFirst().getDisabilities());
+                    result.registers().getFirst().getPerson().getDisabilities());
         }
     }
 
@@ -297,7 +299,7 @@ class RegisterSheetMapperTests {
         var result = mapper.map(List.of(header(), row), 1);
         assertTrue(result.errors().isEmpty());
         assertEquals(Set.of(Disabilities.INTELLECTUAL, Disabilities.HEARING, Disabilities.MOTOR),
-                result.registers().getFirst().getDisabilities());
+                result.registers().getFirst().getPerson().getDisabilities());
     }
 
     @Test
@@ -306,7 +308,7 @@ class RegisterSheetMapperTests {
             var row = row();
             row.set(10, disability.getDescription());
             assertEquals(Set.of(disability), mapper.map(List.of(header(), row), 1)
-                    .registers().getFirst().getDisabilities());
+                    .registers().getFirst().getPerson().getDisabilities());
         }
     }
 

@@ -1,22 +1,23 @@
-package com.sheets.entities;
+package com.entities;
 
-import com.sheets.enums.Disabilities;
-import com.sheets.enums.Education;
-import com.sheets.enums.Gender;
-import com.sheets.enums.WorkState;
+import com.enums.Disabilities;
+import com.enums.Education;
+import com.enums.Gender;
+import com.enums.WorkState;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.LocalDate;
+import javax.annotation.Nullable;
 import java.util.EnumSet;
 import java.util.Set;
 
 @Entity
-@Table(uniqueConstraints = @UniqueConstraint(name = "uk_register_cpf", columnNames = "cpf"))
+@Table(uniqueConstraints = @UniqueConstraint(name = "uk_person_cpf", columnNames = "cpf"))
 @Getter
 @Setter
-public class Register {
+public class Person {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -48,13 +49,27 @@ public class Register {
     @Column(nullable = false, length = 64)
     private WorkState workState;
     @ElementCollection
-    @CollectionTable(name = "register_disabilities", joinColumns = @JoinColumn(name = "register_id"),
-            uniqueConstraints = @UniqueConstraint(columnNames = {"register_id", "disability"}))
+    @CollectionTable(name = "person_disabilities", joinColumns = @JoinColumn(name = "person_id"),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"person_id", "disability"}))
     @Column(name = "disability", nullable = false, length = 64)
     @Enumerated(EnumType.STRING)
     private Set<Disabilities> disabilities = EnumSet.noneOf(Disabilities.class);
-    @Column(nullable = false, columnDefinition = "text")
-    private String courseOfInterest;
-    @Column(nullable = false)
-    private LocalDate registerDate;
+
+    public Person(String fullName,@Nullable String socialName, String cpf, String email, String personalPhone, Boolean personalPhoneHasWhatsapp, @Nullable String familyPhone, Address address, Gender gender, Education education, WorkState workState, Set<Disabilities> disabilities) {
+        this.fullName = fullName;
+        this.socialName = socialName;
+        this.cpf = cpf;
+        this.email = email;
+        this.personalPhone = personalPhone;
+        this.personalPhoneHasWhatsapp = personalPhoneHasWhatsapp;
+        this.familyPhone = familyPhone;
+        this.address = address;
+        this.gender = gender;
+        this.education = education;
+        this.workState = workState;
+        this.disabilities = disabilities;
+    }
+
+    public Person() {
+    }
 }

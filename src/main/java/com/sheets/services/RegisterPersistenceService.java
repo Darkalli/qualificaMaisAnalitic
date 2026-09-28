@@ -2,7 +2,9 @@ package com.sheets.services;
 
 import com.sheets.RegisterImportResult;
 import com.sheets.SheetImportResult;
-import com.sheets.entities.Register;
+import com.entities.Register;
+import com.entities.Person;
+import com.sheets.repositories.PersonRepository;
 import com.sheets.repositories.RegisterRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,9 +16,11 @@ import java.util.Objects;
 @Service
 public class RegisterPersistenceService {
     private final RegisterRepository repository;
+    private final PersonRepository people;
 
-    public RegisterPersistenceService(RegisterRepository repository) {
+    public RegisterPersistenceService(RegisterRepository repository, PersonRepository people) {
         this.repository = repository;
+        this.people = people;
     }
 
     /** Recebe somente os objetos novos e normalizados produzidos pelo mapper. */
@@ -26,19 +30,30 @@ public class RegisterPersistenceService {
         int unchanged = 0;
         var conflicts = new ArrayList<RegisterImportResult.Conflict>();
         for (Register incoming : collection.registers()) {
-            if (incoming.getCpf() == null || !incoming.getCpf().matches("[0-9]{11}")) {
+            Person incomingPerson = incoming.getPerson();
+            if (incomingPerson == null || incomingPerson.getCpf() == null
+                    || !incomingPerson.getCpf().matches("[0-9]{11}")) {
                 throw new IllegalArgumentException("A persistência requer CPF normalizado com 11 dígitos.");
             }
-            if (incoming.getId() != null || incoming.getAddress() == null
-                    || incoming.getAddress().getId() != null) {
-                throw new IllegalArgumentException("A importação requer um cadastro e endereço novos, sem IDs.");
+            if (incoming.getId() != null || incomingPerson.getId() != null || incomingPerson.getAddress() == null
+                    || incomingPerson.getAddress().getId() != null) {
+                throw new IllegalArgumentException("A importação requer inscrição, pessoa e endereço novos, sem IDs.");
             }
-            var existing = repository.findByCpf(incoming.getCpf());
+            Person savedPerson = people.findByCpf(incomingPerson.getCpf())
+                    .orElseGet(() -> people.save(incomingPerson));
+            var fields = differences(savedPerson, incomingPerson);
+            // O curso ainda é texto no modelo atual; não há catálogo ou horários nesta etapa.
+            var existing = repository.findByPerson_CpfAndCourseOfInterest(
+                    savedPerson.getCpf(), incoming.getCourseOfInterest());
             if (existing.isEmpty()) {
+                incoming.setPerson(savedPerson);
                 repository.save(incoming);
                 inserted++;
+                if (!fields.isEmpty()) {
+                    conflicts.add(new RegisterImportResult.Conflict(incoming.getId(), fields));
+                }
             } else {
-                var fields = differences(existing.get(), incoming);
+                compare(fields, "registerDate", existing.get().getRegisterDate(), incoming.getRegisterDate());
                 if (fields.isEmpty()) {
                     unchanged++;
                 } else {
@@ -51,7 +66,7 @@ public class RegisterPersistenceService {
         return new RegisterImportResult(inserted, unchanged, conflicts, collection.errors(), collection.ignoredRows());
     }
 
-    private List<String> differences(Register saved, Register incoming) {
+    private List<String> differences(Person saved, Person incoming) {
         var fields = new ArrayList<String>();
         compare(fields, "fullName", saved.getFullName(), incoming.getFullName());
         compare(fields, "socialName", saved.getSocialName(), incoming.getSocialName());
@@ -66,8 +81,6 @@ public class RegisterPersistenceService {
         compare(fields, "education", saved.getEducation(), incoming.getEducation());
         compare(fields, "workState", saved.getWorkState(), incoming.getWorkState());
         compare(fields, "disabilities", saved.getDisabilities(), incoming.getDisabilities());
-        compare(fields, "courseOfInterest", saved.getCourseOfInterest(), incoming.getCourseOfInterest());
-        compare(fields, "registerDate", saved.getRegisterDate(), incoming.getRegisterDate());
         return fields;
     }
 

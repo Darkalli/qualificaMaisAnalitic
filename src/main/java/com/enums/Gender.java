@@ -1,4 +1,4 @@
-package com.sheets.enums;
+package com.enums;
 
 public enum Gender {
 
