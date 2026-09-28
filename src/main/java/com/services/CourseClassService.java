@@ -1,5 +1,7 @@
 package com.services;
 
-public class CourseClassService
-{
+import org.springframework.stereotype.Service;
+
+@Service
+public class CourseClassService {
 }
