@@ -1,7 +1,54 @@
 package com.services;
 
+import com.dtos.presenceDtos.AddPresenceDto;
+import com.dtos.presenceDtos.PresenceByDayAndCourseDto;
+import com.dtos.presenceDtos.PresenceByPersonDto;
+import com.dtos.presenceDtos.PresenceUpdateDto;
+import com.entities.Course;
+import com.entities.Person;
+import com.entities.Presence;
+import com.repositories.CourseRepository;
+import com.repositories.PersonRepository;
+import com.repositories.PresenceRepository;
+import jdk.jfr.Category;
 import org.springframework.stereotype.Service;
+
+import java.lang.reflect.Field;
+import java.util.List;
 
 @Service
 public class PresenceService {
+
+    private final PresenceRepository presenceRepository;
+    private final PersonRepository personRepository;
+    private final CourseRepository courseRepository;
+
+
+    public PresenceService(PresenceRepository presenceRepository, PersonRepository personRepository, CourseRepository courseRepository) {
+        this.presenceRepository = presenceRepository;
+        this.personRepository = personRepository;
+        this.courseRepository = courseRepository;
+    }
+
+    public void addPresence (AddPresenceDto newPresence){
+        Person person = personRepository.getById(newPresence.personId());
+        Course course = courseRepository.getById(newPresence.courseId());
+
+        Presence presence = new Presence(person, newPresence.data(), course, newPresence.status());
+        presenceRepository.save(presence);
+    }
+
+    public void updatePresence (PresenceUpdateDto update){
+        Presence presence = presenceRepository.findByDateAndPersonId(update.date(), update.personId());
+        presence.setStatus(update.status());
+        presenceRepository.save(presence);
+    }
+
+    public List<Presence> getPresenceByPerson(PresenceByPersonDto byPerson){
+        return presenceRepository.findByPersonId(byPerson.personId());
+    }
+
+    public List<Presence> getPresenceByDateAndCourse(PresenceByDayAndCourseDto dayAndCourse){
+        return presenceRepository.findByDateAndCourseId(dayAndCourse.date(), dayAndCourse.courseId());
+    }
 }

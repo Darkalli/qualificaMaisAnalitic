@@ -12,5 +12,6 @@ public interface PresenceRepository extends JpaRepository<Presence, Long> {
 
     List<Presence> findByPersonId(Long personId);
 
-    List<Presence> findByDataAndCourse(LocalDate data, Course course);
+    List<Presence> findByDateAndCourseId(LocalDate data, Long courseId);
+    Presence findByDateAndPersonId(LocalDate data, Long personId);
 }
