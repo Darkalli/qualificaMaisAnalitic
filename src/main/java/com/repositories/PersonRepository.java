@@ -1,4 +1,4 @@
-package com.sheets.repositories;
+package com.repositories;
 
 import com.entities.Person;
 import org.springframework.data.jpa.repository.JpaRepository;

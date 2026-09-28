@@ -4,8 +4,8 @@ import com.sheets.RegisterImportResult;
 import com.sheets.SheetImportResult;
 import com.entities.Register;
 import com.entities.Person;
-import com.sheets.repositories.PersonRepository;
-import com.sheets.repositories.RegisterRepository;
+import com.repositories.PersonRepository;
+import com.repositories.RegisterRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
