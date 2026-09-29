@@ -5,6 +5,7 @@ import com.dtos.personDtos.UpdatePersonDto;
 import com.entities.Person;
 import com.mappers.PersonMapper;
 import com.repositories.PersonRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.crossstore.ChangeSetPersister;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -30,9 +31,9 @@ public class PersonService {
                 addPerson.workState(),addPerson.disabilities()));
     }
 
-    public void updatePerson (UpdatePersonDto updatePerson) throws Exception {
+    public void updatePerson (UpdatePersonDto updatePerson){
         Person person = personRepository.findByCpf(updatePerson.Cpf())
-                .orElseThrow(() -> new Exception("Usuário não encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
         mapper.updatePersonfromDto(updatePerson, person);
         personRepository.save(person);
     }

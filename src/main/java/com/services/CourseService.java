@@ -6,6 +6,7 @@ import com.entities.Course;
 import com.entities.Person;
 import com.mappers.CourseMapper;
 import com.repositories.CourseRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -25,9 +26,9 @@ public class CourseService {
     public void addCourse (AddCourseDto courseDto){
         courseRepository.save(new Course(courseDto.name(), courseDto.description(),courseDto.start(), courseDto.finish()));
     }
-    public void updateCourse (Long courseId, UpdateCourseDto courseDto) throws Exception {
+    public void updateCourse (Long courseId, UpdateCourseDto courseDto){
         Course course = courseRepository.findByid(courseId)
-                .orElseThrow(() -> new Exception("Usuário não encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
         mapper.updateCoursefromDto(courseDto, course);
         courseRepository.save(course);
     }

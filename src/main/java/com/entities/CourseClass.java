@@ -24,5 +24,11 @@ public class CourseClass {
     @JoinColumn(name = "course_id")
     private Course course;
 
-
+    public CourseClass(LocalDate day, String session, LocalDateTime start, LocalDateTime finish, Course course) {
+        this.day = day;
+        this.session = session;
+        this.start = start;
+        this.finish = finish;
+        this.course = course;
+    }
 }
