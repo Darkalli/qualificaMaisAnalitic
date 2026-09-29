@@ -4,6 +4,7 @@ import com.dtos.courseClassesDtos.AddCourseClassDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.entities.Course;
 import com.entities.CourseClass;
+import com.mappers.CourseClassMapper;
 import com.repositories.CourseClassRepository;
 import com.repositories.CourseRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -16,10 +17,12 @@ public class CourseClassService {
 
     private final CourseClassRepository courseClassRepository;
     private final CourseRepository courseRepository;
+    private final CourseClassMapper mapper;
 
-    public CourseClassService(CourseClassRepository courseClassRepository, CourseRepository courseRepository) {
+    public CourseClassService(CourseClassRepository courseClassRepository, CourseRepository courseRepository, CourseClassMapper mapper) {
         this.courseClassRepository = courseClassRepository;
         this.courseRepository = courseRepository;
+        this.mapper = mapper;
     }
 
     public void addCourseClass(AddCourseClassDto courseClassDto){
@@ -30,6 +33,7 @@ public class CourseClassService {
     public void updateCourseClass(UpdateCourseClassDto updateCourseClassDto){
         CourseClass courseClass = courseClassRepository.findById(updateCourseClassDto.classId())
                 .orElseThrow(() -> new EntityNotFoundException("Turma não encontrada com o ID: " + updateCourseClassDto.classId()));
+        mapper.updateCourseClassfromDto(updateCourseClassDto,courseClass);
         courseClassRepository.save(courseClass);
     }
 

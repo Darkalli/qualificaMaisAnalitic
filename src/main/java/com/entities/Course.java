@@ -8,6 +8,7 @@ import javax.annotation.Nullable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -22,8 +23,8 @@ public class Course {
     private String description;
     private LocalDate start;
     private LocalDate finish;
-    @OneToMany
-    private ArrayList<CourseClass> courseClass;
+    @OneToMany(mappedBy = "course")
+    private List<CourseClass> courseClass = new ArrayList<>();
 
     public Course(String name,@Nullable String description, LocalDate start, LocalDate finish) {
         this.name = name;

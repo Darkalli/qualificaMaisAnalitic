@@ -17,9 +17,9 @@ public class Presence {
 
     @ManyToOne
     @JoinColumn(name = "person_id", nullable = false)
-    private Person Person;
+    private Person person;
 
-    private LocalDate data;
+    private LocalDate date;
 
     @ManyToOne
     @JoinColumn(name = "course_id", nullable = false)
@@ -28,10 +28,13 @@ public class Presence {
     @Enumerated(EnumType.STRING)
     private PresenceStatus status;
 
-    public Presence(Person person, LocalDate data, Course course, PresenceStatus status) {
-        Person = person;
-        this.data = data;
+    public Presence(Person person, LocalDate date, Course course, PresenceStatus status) {
+        this.person = person;
+        this.date = date;
         this.course = course;
         this.status = status;
+    }
+
+    public Presence() {
     }
 }

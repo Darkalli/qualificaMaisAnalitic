@@ -6,12 +6,14 @@ import com.entities.Person;
 import com.mappers.PersonMapper;
 import com.repositories.PersonRepository;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.data.crossstore.ChangeSetPersister;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+
+import static com.utils.CpfUtils.*;
+import static com.utils.CellphoneUtils.*;
 
 @Service
 public class PersonService {
@@ -25,16 +27,31 @@ public class PersonService {
     }
 
     public void addPerson (AddPersonDto addPerson){
-        personRepository.save(new Person(addPerson.fullName(), addPerson.socialName(), addPerson.cpf(),
-                addPerson.email(), addPerson.personalPhone(), addPerson.personalPhoneHasWhatsapp(),
-                addPerson.familyPhone(), addPerson.address(), addPerson.gender(), addPerson.education(),
+        String cpf = formatCpf(addPerson.cpf());
+        cpf = cleanCpf(cpf);
+        String cellphone = formatPhone(addPerson.personalPhone());
+        cellphone = normalizePhone(cellphone);
+        String familyPhone = formatPhone(addPerson.familyPhone());
+        familyPhone = normalizePhone(familyPhone);
+        personRepository.save(new Person(addPerson.fullName(), addPerson.socialName(), cpf ,
+                addPerson.email(), cellphone, addPerson.personalPhoneHasWhatsapp(),
+                familyPhone, addPerson.address(), addPerson.gender(), addPerson.education(),
                 addPerson.workState(),addPerson.disabilities()));
     }
 
     public void updatePerson (UpdatePersonDto updatePerson){
-        Person person = personRepository.findByCpf(updatePerson.Cpf())
+        String cpf = formatCpf(updatePerson.Cpf());
+        cpf = cleanCpf(cpf);
+        Person person = personRepository.findByCpf(cpf)
                 .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
         mapper.updatePersonfromDto(updatePerson, person);
+        String cellphone = formatPhone(updatePerson.personalPhone());
+        cellphone = normalizePhone(cellphone);
+        String familyPhone = formatPhone(updatePerson.familyPhone());
+        familyPhone = normalizePhone(familyPhone);
+        person.setCpf(cpf);
+        person.setPersonalPhone(cellphone);
+        person.setFamilyPhone(familyPhone);
         personRepository.save(person);
     }
 
@@ -48,6 +65,8 @@ public class PersonService {
    }
 
    public Optional<Person> getByCpf (String cpf){
-        return personRepository.findByCpf(cpf);
+       String formatedCpf = formatCpf(cpf);
+       formatedCpf = cleanCpf(formatedCpf);
+        return personRepository.findByCpf(formatedCpf);
    }
 }

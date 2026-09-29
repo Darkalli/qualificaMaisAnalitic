@@ -1,16 +1,15 @@
 package com.mappers;
 
-import com.dtos.CourseDtos.UpdateCourseDto;
-import com.dtos.personDtos.UpdatePersonDto;
-import com.entities.Course;
-import com.entities.Person;
+
+import com.dtos.courseClassesDtos.UpdateCourseClassDto;
+import com.entities.CourseClass;
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 
 @Mapper(componentModel = "spring")
-public interface CourseMapper {
+public interface CourseClassMapper {
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    void updateCoursefromDto(UpdateCourseDto dto, @MappingTarget Course course);
+    void updateCourseClassfromDto(UpdateCourseClassDto dto, @MappingTarget CourseClass courseClass);
 }

@@ -10,6 +10,7 @@ import com.entities.Presence;
 import com.repositories.CourseRepository;
 import com.repositories.PersonRepository;
 import com.repositories.PresenceRepository;
+import jakarta.persistence.EntityNotFoundException;
 import jdk.jfr.Category;
 import org.springframework.stereotype.Service;
 
@@ -39,7 +40,8 @@ public class PresenceService {
     }
 
     public void updatePresence (PresenceUpdateDto update){
-        Presence presence = presenceRepository.findByDateAndPersonId(update.date(), update.personId());
+        Presence presence = presenceRepository.findByDateAndPersonIdAndCourseId(update.date(), update.personId(), update.courseId())
+                .orElseThrow(() -> new EntityNotFoundException("Presença não encontrada"));
         presence.setStatus(update.status());
         presenceRepository.save(presence);
     }

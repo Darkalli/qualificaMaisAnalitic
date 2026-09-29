@@ -16,6 +16,7 @@ public class CourseClass {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "class_day")
     private LocalDate day;
     private String session;
     private LocalDateTime start;
@@ -30,5 +31,8 @@ public class CourseClass {
         this.start = start;
         this.finish = finish;
         this.course = course;
+    }
+
+    public CourseClass() {
     }
 }
