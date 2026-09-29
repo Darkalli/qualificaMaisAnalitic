@@ -167,7 +167,11 @@ Os testes usam dados fictícios e não acessam o Google nem o PostgreSQL configu
 
 `PersonDisabilitiesPersistenceTests` valida a gravação, leitura e atualização das deficiências da pessoa. Execute-o com `.\mvnw.cmd test "-Dtest=PersonDisabilitiesPersistenceTests"`.
 
-`RegisterPersistenceTests` cobre gravação completa, IDs automáticos, CPF com zero inicial, inscrições diferentes para a mesma pessoa, reimportação, divergências, rollback, unicidade de CPF/inscrição e ausência de CPF nos logs de falha SQL. `PersonMigrationTests` cria dados no schema V1 e verifica a migração para V2, incluindo vínculos, deficiências e geração de novos IDs. `RegisterImportServiceTests` cobre a ligação entre coleta e persistência.
+`RegisterPersistenceTests` cobre gravação completa, IDs automáticos, CPF com zero inicial, inscrições diferentes para a mesma pessoa, reimportação, divergências, rollback, unicidade de CPF/inscrição e ausência de CPF nos logs de falha SQL. `PersonMigrationTests` cria dados no schema V1 e verifica as migrações seguintes, incluindo vínculos, deficiências e geração de novos IDs. `RegisterImportServiceTests` cobre a ligação entre coleta e persistência.
+
+Em `src/test/java/com/example/qualificamaisanalitic/services`, os testes de pessoa, curso, turma, presença e inscrição verificam cadastro, atualização parcial, consultas, exclusão e registros inexistentes. Os testes unitários usam repositórios simulados e os mappers reais gerados pelo MapStruct. `ServicesPersistenceTests` exercita os serviços com H2/Flyway, incluindo unicidade de inscrição, presenças em cursos diferentes no mesmo dia e atualização de deficiências sem uma transação aberta pelo chamador. Também verifica que uma atualização inválida não altera os dados salvos. `CoursePresencePersistenceTests` verifica os relacionamentos e a leitura das novas tabelas.
+
+`CpfUtilsTests` e `CellphoneUtilsTests` cobrem formatação e normalização, CPF com zero inicial, telefone fixo/celular, prefixo `+55`, DDD 55, contato opcional ausente e quantidades inválidas de dígitos. Esses testes não comprovam validação dos dígitos verificadores de CPF nem existência dos números de telefone.
 
 Também é possível executar a suíte em um **banco PostgreSQL exclusivo para testes**, já criado e inicialmente vazio. Os testes apagam os registros de suas tabelas entre casos; nunca indique um banco de trabalho:
 

@@ -8,6 +8,7 @@ import com.repositories.PersonRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -39,16 +40,18 @@ public class PersonService {
                 addPerson.workState(),addPerson.disabilities()));
     }
 
+    @Transactional
     public void updatePerson (UpdatePersonDto updatePerson){
         String cpf = formatCpf(updatePerson.Cpf());
         cpf = cleanCpf(cpf);
         Person person = personRepository.findByCpf(cpf)
                 .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
+        // Campos omitidos preservam os valores salvos, como no mapper de atualização parcial.
+        String cellphone = updatePerson.personalPhone() == null
+                ? person.getPersonalPhone() : normalizePhone(updatePerson.personalPhone());
+        String familyPhone = updatePerson.familyPhone() == null
+                ? person.getFamilyPhone() : normalizePhone(updatePerson.familyPhone());
         mapper.updatePersonfromDto(updatePerson, person);
-        String cellphone = formatPhone(updatePerson.personalPhone());
-        cellphone = normalizePhone(cellphone);
-        String familyPhone = formatPhone(updatePerson.familyPhone());
-        familyPhone = normalizePhone(familyPhone);
         person.setCpf(cpf);
         person.setPersonalPhone(cellphone);
         person.setFamilyPhone(familyPhone);
