@@ -17,6 +17,7 @@ public class CourseClass {
     private Long id;
 
     private LocalDate day;
+    private String session;
     private LocalDateTime start;
     private LocalDateTime finish;
     @ManyToOne

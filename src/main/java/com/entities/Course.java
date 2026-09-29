@@ -25,12 +25,11 @@ public class Course {
     @OneToMany
     private ArrayList<CourseClass> courseClass;
 
-    public Course(String name,@Nullable String description, LocalDate start, LocalDate finish, ArrayList<CourseClass> courseClass) {
+    public Course(String name,@Nullable String description, LocalDate start, LocalDate finish) {
         this.name = name;
         this.description = description;
         this.start = start;
         this.finish = finish;
-        this.courseClass = courseClass;
     }
 
     public Course() {

@@ -10,4 +10,6 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     Optional<Course> findByid(Long id);
 
     Optional<Course> getById(long id);
+
+    Optional<Course> findByName(String name);
 }
