@@ -8,6 +8,8 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 @Entity
+@Table(name = "presence", uniqueConstraints = @UniqueConstraint(name = "uk_presence_person_course_date",
+        columnNames = {"person_id", "course_id", "date"}))
 @Getter
 @Setter
 public class Presence {

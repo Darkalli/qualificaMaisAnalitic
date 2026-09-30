@@ -13,7 +13,7 @@ import java.util.EnumSet;
 import java.util.Set;
 
 @Entity
-@Table(uniqueConstraints = @UniqueConstraint(name = "uk_person_cpf", columnNames = "cpf"))
+@Table(name = "person", uniqueConstraints = @UniqueConstraint(name = "uk_person_cpf", columnNames = "cpf"))
 @Getter
 @Setter
 public class Person {
@@ -50,7 +50,7 @@ public class Person {
     private WorkState workState;
     @ElementCollection
     @CollectionTable(name = "person_disabilities", joinColumns = @JoinColumn(name = "person_id"),
-            uniqueConstraints = @UniqueConstraint(columnNames = {"person_id", "disability"}))
+            uniqueConstraints = @UniqueConstraint(name = "uk_person_disability", columnNames = {"person_id", "disability"}))
     @Column(name = "disability", nullable = false, length = 64)
     @Enumerated(EnumType.STRING)
     private Set<Disabilities> disabilities = EnumSet.noneOf(Disabilities.class);
