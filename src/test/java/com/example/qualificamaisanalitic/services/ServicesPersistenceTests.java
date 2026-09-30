@@ -7,7 +7,6 @@ import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.dtos.personDtos.UpdatePersonDto;
 import com.dtos.presenceDtos.AddPresenceDto;
 import com.dtos.presenceDtos.PresenceByDayAndCourseDto;
-import com.dtos.presenceDtos.PresenceByPersonDto;
 import com.dtos.presenceDtos.PresenceUpdateDto;
 import com.dtos.registerDtos.AddRegisterDto;
 import com.entities.Course;

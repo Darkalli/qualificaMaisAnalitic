@@ -21,12 +21,12 @@ public class CourseClassController {
     }
 
     @PostMapping
-    public ResponseEntity<CourseClass> createCourseClass(AddCourseClassDto courseClassDto){
+    public ResponseEntity<CourseClass> createCourseClass(@RequestBody AddCourseClassDto courseClassDto){
         return ResponseEntity.status(HttpStatus.CREATED).body(courseClassService.addCourseClass(courseClassDto));
     }
 
     @PatchMapping
-    public ResponseEntity<CourseClass> updateCourseClass(UpdateCourseClassDto updateCourseClassDto){
+    public ResponseEntity<CourseClass> updateCourseClass(@RequestBody UpdateCourseClassDto updateCourseClassDto){
         return ResponseEntity.ok().body(courseClassService.updateCourseClass(updateCourseClassDto));
     }
 

@@ -22,12 +22,12 @@ public class CourseController {
     }
 
     @PostMapping
-    public ResponseEntity<Course> createCourse(AddCourseDto courseDto){
+    public ResponseEntity<Course> createCourse(@RequestBody AddCourseDto courseDto){
         return ResponseEntity.status(HttpStatus.CREATED).body(courseService.addCourse(courseDto));
     }
 
     @PatchMapping
-    public ResponseEntity<Course> updateCourse(UpdateCourseDto updateCourseDto){
+    public ResponseEntity<Course> updateCourse(@RequestBody UpdateCourseDto updateCourseDto){
         return ResponseEntity.ok().body(courseService.updateCourse(updateCourseDto));
     }
 
@@ -43,7 +43,7 @@ public class CourseController {
     }
 
     @GetMapping("/course/{name}")
-    public ResponseEntity<Course> getCourseByName(String name){
+    public ResponseEntity<Course> getCourseByName(@PathVariable String name){
         return ResponseEntity.ok(courseService.getCourseByName(name));
     }
 
