@@ -32,10 +32,15 @@ public class CourseClassService {
         return courseClassRepository.save(new CourseClass(dto.day(), dto.session(), dto.start(), dto.finish(), dto.course()));
     }
 
-    public CourseClass updateCourseClass(UpdateCourseClassDto updateCourseClassDto){
-        CourseClass courseClass = courseClassRepository.findById(updateCourseClassDto.classId())
-                .orElseThrow(() -> new EntityNotFoundException("Turma não encontrada com o ID: " + updateCourseClassDto.classId()));
-        mapper.updateCourseClassfromDto(updateCourseClassDto,courseClass);
+    public CourseClass updateCourseClass(UpdateCourseClassDto dto){
+        if (dto.day() != null && dto.course() == null) {
+            throw new IllegalArgumentException("Para alterar o dia, as informações do curso são obrigatórias.");
+        }else if (courseClassRepository.existsByCourseAndDay(dto.course(), dto.day())) {
+            throw new IllegalArgumentException("O curso já possui uma aula registrada para este dia.");
+        }
+        CourseClass courseClass = courseClassRepository.findById(dto.classId())
+                .orElseThrow(() -> new EntityNotFoundException("Turma não encontrada com o ID: " + dto.classId()));
+        mapper.updateCourseClassfromDto(dto,courseClass);
         return courseClassRepository.save(courseClass);
     }
 
