@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Entity
-@Table
+@Table(name = "course_class", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"course_id", "day"})
+})
 public class CourseClass {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,7 +26,6 @@ public class CourseClass {
     private LocalDateTime finish;
     @ManyToOne
     @JoinColumn(name = "course_id")
-    // O curso permanece no JSON da turma, mas sem repetir a coleção que contém a própria turma.
     @JsonIgnoreProperties("courseClass")
     private Course course;
 

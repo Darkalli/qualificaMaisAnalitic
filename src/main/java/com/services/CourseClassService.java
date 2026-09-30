@@ -25,9 +25,11 @@ public class CourseClassService {
         this.mapper = mapper;
     }
 
-    public CourseClass addCourseClass(AddCourseClassDto courseClassDto){
-        return courseClassRepository.save(new CourseClass(courseClassDto.day(), courseClassDto.session(),
-                courseClassDto.start(), courseClassDto.finish(), courseClassDto.course()));
+    public CourseClass addCourseClass(AddCourseClassDto dto) {
+        if (courseClassRepository.existsByCourseAndDay(dto.course(), dto.day())) {
+            throw new IllegalArgumentException("O curso já possui uma aula registrada para este dia.");
+        }
+        return courseClassRepository.save(new CourseClass(dto.day(), dto.session(), dto.start(), dto.finish(), dto.course()));
     }
 
     public CourseClass updateCourseClass(UpdateCourseClassDto updateCourseClassDto){
