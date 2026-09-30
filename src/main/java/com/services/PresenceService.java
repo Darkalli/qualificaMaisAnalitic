@@ -31,19 +31,19 @@ public class PresenceService {
         this.courseRepository = courseRepository;
     }
 
-    public void addPresence (AddPresenceDto newPresence){
+    public Presence addPresence (AddPresenceDto newPresence){
         Person person = personRepository.getById(newPresence.personId());
         Course course = courseRepository.getById(newPresence.courseId());
 
         Presence presence = new Presence(person, newPresence.data(), course, newPresence.status());
-        presenceRepository.save(presence);
+        return presenceRepository.save(presence);
     }
 
-    public void updatePresence (PresenceUpdateDto update){
+    public Presence updatePresence (PresenceUpdateDto update){
         Presence presence = presenceRepository.findByDateAndPersonIdAndCourseId(update.date(), update.personId(), update.courseId())
                 .orElseThrow(() -> new EntityNotFoundException("Presença não encontrada"));
         presence.setStatus(update.status());
-        presenceRepository.save(presence);
+        return presenceRepository.save(presence);
     }
 
     public List<Presence> getPresenceByPerson(PresenceByPersonDto byPerson){
