@@ -38,10 +38,11 @@ O Flyway aplica as migrações e o Hibernate valida as tabelas. **Em bancos com 
 | Cursos | `/api/course` | Cadastro, atualização, listagem, busca por nome e exclusão |
 | Turmas | `/api/courseClass` | Cadastro, atualização, consulta por curso e exclusão |
 | Presenças | `/api/presence` | Registro, atualização e consultas por pessoa ou curso/data |
+| Inscrições | `/api/register` | Criação, consulta por CPF ou CPF/curso e exclusão |
 
 POST e PATCH recebem JSON. Criações retornam **201**, consultas e atualizações **200**, e exclusões **204**.
 
-Consulte as [rotas completas e exemplos](docs/guia-tecnico.md#api-http): algumas URLs repetem o recurso, como `/api/person/person/{cpf}`, e o GET de presenças por curso/data ainda exige corpo JSON. Inscrições e endereços não têm endpoints próprios.
+Consulte as [rotas completas e exemplos](docs/guia-tecnico.md#api-http): algumas URLs repetem o recurso, como `/api/person/person/{cpf}`, e os GETs de presença por curso/data e de inscrição por CPF/curso exigem corpo JSON. Endereços não têm endpoints próprios.
 
 ## Importação do Google Sheets
 
@@ -86,5 +87,7 @@ Para executar apenas os testes da API:
 ## Estado atual
 
 O projeto está em desenvolvimento. Ainda faltam autenticação, tratamento padronizado de erros da API, validação completa das entradas, regras de conflito de horários e unicidade de presenças. As respostas HTTP usam entidades JPA diretamente.
+
+A criação e a edição de aulas consultam duplicidade por curso/dia. A edição ainda precisa tratar a própria aula e campos omitidos; falta garantir a regra por migração no banco. Veja os [limites da validação de aulas](docs/guia-tecnico.md#uma-aula-por-curso-e-dia).
 
 Veja o [guia técnico](docs/guia-tecnico.md) para estrutura do código, exemplos de requisições, configuração e cobertura dos testes.

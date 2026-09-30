@@ -6,8 +6,8 @@ Referência de configuração, API, importação e testes.
 
 ## Estrutura
 
-- `com.controlers`: controllers REST de pessoa, curso, turma e presença. `AddressController` e `RegisterController` ainda não possuem rotas.
-- `com.services`: operações de cadastro, atualização, consulta e exclusão usadas pelos controllers; `RegisterService` continua disponível como serviço Java interno.
+- `com.controlers`: controllers REST de pessoa, curso, turma, presença e inscrição. Somente `AddressController` ainda não possui rotas.
+- `com.services`: operações de cadastro, atualização, consulta e exclusão usadas pelos controllers, incluindo `RegisterService` para inscrição de pessoas em cursos existentes.
 - `com.dtos` e `com.mappers`: entradas dos serviços e atualização parcial com MapStruct.
 - `GoogleSheetsReader`: autentica com OAuth e lê a planilha com acesso somente de leitura.
 - `RegisterSheetMapper`: identifica as colunas pelo cabeçalho e converte cada linha em `Register`, incluindo `Person` e seu `Address`.
@@ -49,8 +49,12 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | PATCH | `/api/presence` | `PresenceUpdateDto`: `personId`, `courseId`, `date` e novo `status`. | 200 + presença |
 | GET | `/api/presence/presence/{personId}` | Lista presenças da pessoa. | 200 + lista |
 | GET | `/api/presence` | **Corpo JSON** com `courseId` e `date`; filtra as presenças. | 200 + lista |
+| POST | `/api/register` | `AddRegisterDto`: `personCpf`, `courseOfInterestId` e `registerDate`. | 201 + inscrição |
+| GET | `/api/register/register/{cpf}` | Lista inscrições do CPF sem máscara. | 200 + lista |
+| GET | `/api/register` | **Corpo JSON** com `personCpf` e `courseOfInterestId`. | 200 + inscrição |
+| DELETE | `/api/register` | Mesmo corpo da busca específica. | 204 sem corpo |
 
-A consulta de presenças por curso/data ainda usa `@RequestBody` em GET. Enviar apenas parâmetros na URL retorna 400 por ausência do corpo. Migrar esse filtro para parâmetros de consulta é uma melhoria pendente do contrato.
+As consultas de presenças por curso/data e de inscrição por CPF/curso usam `@RequestBody` em GET. Os parâmetros na URL não substituem o corpo obrigatório. A exclusão de inscrição também exige corpo JSON. A API declara 22 endpoints; as rotas de inscrição ainda não têm testes HTTP específicos.
 
 ### Exemplos de entrada
 
@@ -106,13 +110,36 @@ Presença (`POST /api/presence`), usando IDs existentes de pessoa e curso:
 
 Os status disponíveis são `PRESENT`, `ABSENT` e `JUSTIFIED`. Na criação, a chave é `data`; na atualização, no filtro e na resposta é `date`. Exemplo de atualização: `{"personId":7,"courseId":42,"date":"2026-10-01","status":"JUSTIFIED"}`.
 
+Inscrição (`POST /api/register`), usando pessoa e curso existentes:
+
+```json
+{"personCpf":"01234567890","courseOfInterestId":42,"registerDate":"2026-10-01"}
+```
+
+O serviço de inscrição exige CPF sem máscara. GET e DELETE em `/api/register` recebem `{"personCpf":"01234567890","courseOfInterestId":42}`. Não existe PATCH de inscrição.
+
 ### Respostas e limites atuais
 
 As respostas usam as entidades JPA diretamente. Um curso inclui `courseClass`; cada turma inclui seu curso, mas esse curso aninhado omite `courseClass` para evitar recursão no JSON. Ainda não há DTOs específicos de saída nem paginação.
 
 JSON malformado, corpo obrigatório ausente e ID de caminho com formato inválido retornam 400; método HTTP não suportado retorna 405. Ainda não há tratamento global que traduza pessoa/curso inexistente, CPF inválido ou conflito no banco em respostas de negócio padronizadas, como 404/409. Também não há validação completa de campos com Bean Validation. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
 
-Os endpoints ainda não têm autenticação/autorização. Não existem endpoints de inscrição ou endereço independentes; o endereço é recebido com a pessoa. Conflitos de horários e unicidade de presença continuam pendentes. Esses limites não são resolvidos apenas pela criação dos controllers.
+Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. Conflitos de horários e unicidade de presença continuam pendentes.
+
+### Uma aula por curso e dia
+
+No commit `d8fede8`, a criação de `CourseClass` passou a consultar `existsByCourseAndDay(course, day)` e a lançar `IllegalArgumentException` quando encontra uma aula desse curso na mesma data. A regra é por **ID de curso e dia**, independentemente da sessão/horário. Cursos diferentes podem ter aula no mesmo dia, e o mesmo curso pode ter aulas em dias diferentes.
+
+A implementação ainda é parcial:
+
+- Nas alterações locais posteriores ao commit, a edição também consulta duplicidade, mas usa diretamente os campos do DTO antes de carregar a aula. Pode rejeitar a própria aula quando curso/dia são reenviados e deixar passar conflito num PATCH que omite um desses campos. Deve carregar a aula, combinar os valores enviados com os salvos e consultar excluindo o próprio ID.
+- A anotação `@UniqueConstraint` já foi corrigida localmente para as colunas `course_id` e `class_day`. Isso alinha o mapeamento, mas ainda falta a restrição no banco gerenciado por Flyway.
+- As migrações existentes não criam essa unicidade. Com `ddl-auto=validate`, a anotação não altera a tabela; a consulta prévia não impede duas inserções simultâneas. Ainda não existe V5 para essa regra.
+- `course_id` e `class_day` continuam aceitando nulos no schema. A obrigatoriedade desses dados e a consistência entre dia e horários ainda precisam ser garantidas.
+
+A suíte existente passou com 132 testes em H2 em 30/09 às 14:20, incluindo as alterações locais do usuário (`target/one-class-per-day-final-tests.log`), mas ainda não testa duplicidade de aula, edição conflitante, escrita direta no banco ou concorrência. Esse resultado não comprova a regra completa. O assistente alterou documentação, sem modificar código/testes ou criar migração.
+
+Referências: [`UniqueConstraint` em Jakarta Persistence](https://jakarta.ee/specifications/persistence/3.2/apidocs/jakarta.persistence/jakarta/persistence/uniqueconstraint) e [restrições do PostgreSQL](https://www.postgresql.org/docs/current/ddl-constraints.html).
 
 ## Persistência atual e reimportação
 
