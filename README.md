@@ -1,5 +1,11 @@
 # Qualifica Mais Analitic
 
+![Status](https://img.shields.io/badge/Status-Work%20In%20Progress-orange?style=for-the-badge)
+![Java](https://img.shields.io/badge/Java-25-ED8B00?style=for-the-badge)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Google Sheets](https://img.shields.io/badge/Google%20Sheets-34A853?style=for-the-badge&logo=googlesheets&logoColor=white)
+
 Coleta e persistência de inscrições do Google Sheets no PostgreSQL usando `Register`, `Person`, `Address` e cursos previamente cadastrados em `Course`.
 
 ## Estrutura
