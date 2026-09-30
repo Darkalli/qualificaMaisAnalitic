@@ -54,7 +54,7 @@ class CourseServiceTests {
         var courseClass = new CourseClass(START, "Manhã", START.atTime(8, 0), START.atTime(10, 0), course);
         course.getCourseClass().add(courseClass);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
-        service.updateCourse(3L, new UpdateCourseDto("Informática básica", null, null, null));
+        service.updateCourse(new UpdateCourseDto(3L, "Informática básica", null, null, null));
         assertEquals("Informática básica", course.getName());
         assertEquals("Descrição", course.getDescription());
         assertEquals(START, course.getStart());
@@ -68,7 +68,7 @@ class CourseServiceTests {
     void updatesAllProvidedCourseFields() {
         var course = new Course("Antigo", null, START, START);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
-        service.updateCourse(3L, new UpdateCourseDto("Novo", "Descrição", START.plusDays(1), START.plusMonths(2)));
+        service.updateCourse(new UpdateCourseDto(3L, "Novo", "Descrição", START.plusDays(1), START.plusMonths(2)));
         assertEquals("Novo", course.getName());
         assertEquals("Descrição", course.getDescription());
         assertEquals(START.plusDays(1), course.getStart());
@@ -80,7 +80,7 @@ class CourseServiceTests {
     void refusesUpdateWhenCourseDoesNotExist() {
         when(repository.findByid(3L)).thenReturn(Optional.empty());
         assertThrows(EntityNotFoundException.class,
-                () -> service.updateCourse(3L, new UpdateCourseDto("Novo", null, null, null)));
+                () -> service.updateCourse(new UpdateCourseDto(3L, "Novo", null, null, null)));
         verify(repository, never()).save(any());
     }
 
@@ -91,8 +91,8 @@ class CourseServiceTests {
         when(repository.findByName("Informática")).thenReturn(Optional.of(course));
         when(repository.findByName("Ausente")).thenReturn(Optional.empty());
         assertEquals(List.of(course), service.getAllCourses());
-        assertSame(course, service.getCourseByName("Informática").orElseThrow());
-        assertTrue(service.getCourseByName("Ausente").isEmpty());
+        assertSame(course, service.getCourseByName("Informática"));
+        assertThrows(EntityNotFoundException.class, () -> service.getCourseByName("Ausente"));
     }
 
     @Test

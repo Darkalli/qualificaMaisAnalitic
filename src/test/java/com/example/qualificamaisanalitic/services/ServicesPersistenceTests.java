@@ -17,6 +17,8 @@ import com.enums.PresenceStatus;
 import com.example.qualificamaisanalitic.PersonTestData;
 import com.services.*;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
+import com.repositories.PersonRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,21 +45,22 @@ class ServicesPersistenceTests {
     @Autowired private PresenceService presences;
     @Autowired private EntityManager entityManager;
     @Autowired private TransactionTemplate transactions;
+    @Autowired private PersonRepository personRepository;
 
     @Test
     void createsUpdatesQueriesAndDeletesCourseAndClassThroughServices() {
         courses.addCourse(new AddCourseDto("Curso de teste", "Descrição", DAY, DAY.plusMonths(1)));
-        var course = courses.getCourseByName("Curso de teste").orElseThrow();
+        var course = courses.getCourseByName("Curso de teste");
         classes.addCourseClass(new AddCourseClassDto(DAY, "Manhã", DAY.atTime(8, 0), DAY.atTime(10, 0), course));
         entityManager.flush();
         entityManager.clear();
-        var courseClass = classes.allClassesByCourse(course.getId()).getFirst();
-        courses.updateCourse(course.getId(), new UpdateCourseDto("Curso atualizado", null, null, null));
+        var courseClass = classes.allClassesByCourseId(course.getId()).getFirst();
+        courses.updateCourse(new UpdateCourseDto(course.getId(), "Curso atualizado", null, null, null));
         classes.updateCourseClass(new UpdateCourseClassDto(courseClass.getId(), null, "Tarde",
                 DAY.atTime(14, 0), DAY.atTime(16, 0), null));
         entityManager.flush();
         entityManager.clear();
-        var savedCourse = courses.getCourseByName("Curso atualizado").orElseThrow();
+        var savedCourse = courses.getCourseByName("Curso atualizado");
         assertEquals(course.getId(), savedCourse.getId());
         assertEquals("Descrição", savedCourse.getDescription());
         assertEquals(DAY, savedCourse.getStart());
@@ -73,7 +76,7 @@ class ServicesPersistenceTests {
         courses.deleteCourse(course.getId());
         entityManager.flush();
         entityManager.clear();
-        assertTrue(courses.getCourseByName("Curso atualizado").isEmpty());
+        assertThrows(EntityNotFoundException.class, () -> courses.getCourseByName("Curso atualizado"));
     }
 
     @Test
@@ -83,7 +86,7 @@ class ServicesPersistenceTests {
         String cpf = "87654321009";
         try {
             people.addPerson(ServiceTestData.addPerson(cpf, "+55 (11) 99999-0000", "(11) 3333-4444"));
-            Long personId = people.getByCpf(cpf).orElseThrow().getId();
+            Long personId = people.getByCpf(cpf).getId();
             people.updatePerson(new UpdatePersonDto("876.543.210-09", "Nome atualizado", "novo@example.com",
                     "+55 (21) 98888-7777", "(21) 2222-3333", null, null, null, null,
                     Set.of(Disabilities.MOTOR)));
@@ -105,7 +108,7 @@ class ServicesPersistenceTests {
             });
         } finally {
             // Remove somente o cadastro fictício deste teste, que não usa rollback automático.
-            transactions.executeWithoutResult(status -> people.getByCpf(cpf).ifPresent(person -> {
+            transactions.executeWithoutResult(status -> personRepository.findByCpf(cpf).ifPresent(person -> {
                 var address = person.getAddress();
                 entityManager.remove(person);
                 entityManager.flush();
@@ -118,7 +121,7 @@ class ServicesPersistenceTests {
     void directRegistrationsReusePersonAndDatabaseRejectsDuplicateCourse() {
         String cpf = "76543210900";
         people.addPerson(ServiceTestData.addPerson(cpf, "11999990000", null));
-        var personId = people.getByCpf(cpf).orElseThrow().getId();
+        var personId = people.getByCpf(cpf).getId();
         var firstCourse = new Course("Informática", null, DAY, DAY.plusMonths(1));
         var secondCourse = new Course("Inglês", null, DAY, DAY.plusMonths(1));
         entityManager.persist(firstCourse);
@@ -151,7 +154,7 @@ class ServicesPersistenceTests {
         presences.updatePresence(new PresenceUpdateDto(person.getId(), DAY, PresenceStatus.JUSTIFIED, secondCourse.getId()));
         entityManager.flush();
         entityManager.clear();
-        assertEquals(2, presences.getPresenceByPerson(new PresenceByPersonDto(person.getId())).size());
+        assertEquals(2, presences.getPresenceByPerson(person.getId()).size());
         assertEquals(PresenceStatus.PRESENT, presences.getPresenceByDateAndCourse(
                 new PresenceByDayAndCourseDto(firstCourse.getId(), DAY)).getFirst().getStatus());
         assertEquals(PresenceStatus.JUSTIFIED, presences.getPresenceByDateAndCourse(

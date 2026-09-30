@@ -81,7 +81,7 @@ class PresenceServiceTests {
         var result = List.of(new Presence(ServiceTestData.person(), DAY, new Course(), PresenceStatus.PRESENT));
         when(presences.findByPersonId(7L)).thenReturn(result);
         when(presences.findByDateAndCourseId(DAY, 3L)).thenReturn(result);
-        assertEquals(result, service.getPresenceByPerson(new PresenceByPersonDto(7L)));
+        assertEquals(result, service.getPresenceByPerson(7L));
         assertEquals(result, service.getPresenceByDateAndCourse(new PresenceByDayAndCourseDto(3L, DAY)));
     }
 }

@@ -97,7 +97,7 @@ class CourseClassServiceTests {
         when(courses.findByid(3L)).thenReturn(Optional.of(course));
         when(classes.findByCourse(course)).thenReturn(List.of(courseClass));
         when(classes.findById(4L)).thenReturn(Optional.of(courseClass));
-        assertEquals(List.of(courseClass), service.allClassesByCourse(3L));
+        assertEquals(List.of(courseClass), service.allClassesByCourseId(3L));
         service.deleteCourseClass(4L);
         verify(classes).delete(courseClass);
     }
@@ -105,7 +105,7 @@ class CourseClassServiceTests {
     @Test
     void refusesClassSearchForUnknownCourse() {
         when(courses.findByid(3L)).thenReturn(Optional.empty());
-        assertThrows(EntityNotFoundException.class, () -> service.allClassesByCourse(3L));
+        assertThrows(EntityNotFoundException.class, () -> service.allClassesByCourseId(3L));
         verifyNoInteractions(classes);
     }
 }

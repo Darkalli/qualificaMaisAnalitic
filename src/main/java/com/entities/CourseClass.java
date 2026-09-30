@@ -1,5 +1,6 @@
 package com.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -23,6 +24,8 @@ public class CourseClass {
     private LocalDateTime finish;
     @ManyToOne
     @JoinColumn(name = "course_id")
+    // O curso permanece no JSON da turma, mas sem repetir a coleção que contém a própria turma.
+    @JsonIgnoreProperties("courseClass")
     private Course course;
 
     public CourseClass(LocalDate day, String session, LocalDateTime start, LocalDateTime finish, Course course) {

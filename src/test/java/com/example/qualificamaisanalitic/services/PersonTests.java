@@ -14,7 +14,6 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Sort;
 
 import java.util.List;
 import java.util.Optional;
@@ -138,18 +137,18 @@ class PersonTests {
     }
 
     @Test
-    void normalizesCpfWhenSearchingAndReturnsEmptyForUnknownPerson() {
+    void normalizesCpfWhenSearchingAndReportsUnknownPerson() {
         var person = ServiceTestData.person();
         when(repository.findByCpf("01234567890")).thenReturn(Optional.of(person));
         when(repository.findByCpf("98765432100")).thenReturn(Optional.empty());
-        assertSame(person, service.getByCpf("012.345.678-90").orElseThrow());
-        assertTrue(service.getByCpf("987.654.321-00").isEmpty());
+        assertSame(person, service.getByCpf("012.345.678-90"));
+        assertThrows(EntityNotFoundException.class, () -> service.getByCpf("987.654.321-00"));
     }
 
     @Test
-    void listsPeopleSortedByRequestedField() {
+    void listsPeopleFromRepository() {
         var people = List.of(ServiceTestData.person());
-        when(repository.findAll(Sort.by(Sort.Direction.ASC, "fullName"))).thenReturn(people);
+        when(repository.getAll()).thenReturn(people);
         assertEquals(people, service.getAllPerson());
     }
 
