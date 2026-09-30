@@ -34,8 +34,10 @@ class CoursePresencePersistenceTests {
         entityManager.persist(otherCourse);
         var courseClass = new CourseClass(day, "Manhã", day.atTime(8, 0), day.atTime(10, 0), course);
         entityManager.persist(courseClass);
-        var attendance = new Presence(person, day, course, PresenceStatus.PRESENT);
-        var otherAttendance = new Presence(person, day, otherCourse, PresenceStatus.ABSENT);
+        var otherClass = new CourseClass(day, "Tarde", day.atTime(14, 0), day.atTime(16, 0), otherCourse);
+        entityManager.persist(otherClass);
+        var attendance = new Presence(person, courseClass, course, PresenceStatus.PRESENT);
+        var otherAttendance = new Presence(person, otherClass, otherCourse, PresenceStatus.ABSENT);
         entityManager.persist(attendance);
         entityManager.persist(otherAttendance);
         entityManager.flush();
@@ -54,12 +56,17 @@ class CoursePresencePersistenceTests {
         assertEquals(day.atTime(8, 0), savedClass.getStart());
         assertEquals(day.atTime(10, 0), savedClass.getFinish());
 
-        var savedAttendance = presences.findByDateAndPersonIdAndCourseId(day, person.getId(), course.getId())
-                .orElseThrow();
+        var savedAttendance = entityManager.find(Presence.class, attendance.getId());
         assertEquals(attendance.getId(), savedAttendance.getId());
+        assertEquals(courseClass.getId(), savedAttendance.getCourseClass().getId());
+        assertEquals(day, savedAttendance.getCourseClass().getDay());
+        assertEquals(course.getId(), savedAttendance.getCourseClass().getCourse().getId());
+        assertTrue(presences.existsByPersonAndCourseClass(savedAttendance.getPerson(), savedAttendance.getCourseClass()));
         assertEquals(PresenceStatus.PRESENT, savedAttendance.getStatus());
         assertEquals(2, presences.findByPersonId(person.getId()).size());
-        assertEquals(1, presences.findByDateAndCourseId(day, course.getId()).size());
+        assertEquals(1, presences.findByCourseClassIdAndCourseId(courseClass.getId(), course.getId()).size());
+        assertEquals(attendance.getId(), presences.findByCourseClassIdAndPersonId(courseClass.getId(), person.getId())
+                .orElseThrow().getId());
         savedAttendance.setStatus(PresenceStatus.JUSTIFIED);
         entityManager.flush();
         entityManager.clear();
@@ -68,5 +75,24 @@ class CoursePresencePersistenceTests {
         assertEquals("JUSTIFIED", entityManager.createNativeQuery(
                 "select status from presence where id = :id", String.class)
                 .setParameter("id", attendance.getId()).getSingleResult());
+    }
+
+    @Test
+    void databaseRejectsDuplicateAttendanceForPersonAndClass() {
+        var day = LocalDate.of(2026, 9, 29);
+        var person = PersonTestData.person("98765432100");
+        var course = new Course("Informática", null, day, day.plusMonths(1));
+        entityManager.persist(person);
+        entityManager.persist(course);
+        var courseClass = new CourseClass(day, "Manhã", day.atTime(8, 0), day.atTime(10, 0), course);
+        entityManager.persist(courseClass);
+        presences.saveAndFlush(new Presence(person, courseClass, course, PresenceStatus.PRESENT));
+        var otherPerson = PersonTestData.person("12345678901");
+        entityManager.persist(otherPerson);
+        presences.saveAndFlush(new Presence(otherPerson, courseClass, course, PresenceStatus.ABSENT));
+        assertEquals(2, presences.findByCourseClassIdAndCourseId(courseClass.getId(), course.getId()).size());
+
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> presences.saveAndFlush(new Presence(person, courseClass, course, PresenceStatus.ABSENT)));
     }
 }

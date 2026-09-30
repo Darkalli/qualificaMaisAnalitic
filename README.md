@@ -30,6 +30,8 @@ A API fica em `http://localhost:8080` por padrão. Na IDE, execute `com.Qualific
 
 O Flyway aplica as migrações e o Hibernate valida as tabelas. **Em bancos com inscrições anteriores à V4**, cada nome de curso antigo precisa corresponder exatamente a um único curso cadastrado; caso contrário, a migração é interrompida. Veja os [detalhes de migração](docs/guia-tecnico.md#preparar-o-postgresql).
 
+A V5 vincula presenças antigas às aulas por curso/data. Ela interrompe se houver vínculo ausente, ambíguo ou presença duplicada, para revisão dos dados.
+
 ## API
 
 | Recurso | Rota base | Operações |
@@ -37,7 +39,7 @@ O Flyway aplica as migrações e o Hibernate valida as tabelas. **Em bancos com 
 | Pessoas | `/api/person` | Cadastro, atualização, listagem, busca por CPF e exclusão |
 | Cursos | `/api/course` | Cadastro, atualização, listagem, busca por nome e exclusão |
 | Turmas | `/api/courseClass` | Cadastro, atualização, consulta por curso e exclusão |
-| Presenças | `/api/presence` | Registro, atualização e consultas por pessoa ou curso/data |
+| Presenças | `/api/presence` | Registro/atualização por pessoa + aula; consultas por pessoa ou aula/curso |
 | Inscrições | `/api/register` | Criação, consulta por CPF ou CPF/curso e exclusão |
 
 POST e PATCH recebem JSON. Criações retornam **201**, consultas e atualizações **200**, e exclusões **204**.

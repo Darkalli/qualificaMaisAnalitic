@@ -45,10 +45,10 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | PATCH | `/api/courseClass` | `UpdateCourseClassDto`: `classId` e campos a atualizar. | 200 + turma |
 | GET | `/api/courseClass/courseClass/{courseId}` | Lista turmas de um curso existente. | 200 + lista |
 | DELETE | `/api/courseClass/courseClass/{id}` | Exclui pelo ID da turma. | 204 sem corpo |
-| POST | `/api/presence` | `AddPresenceDto`: `personId`, `courseId`, `data` e `status`. | 201 + presença |
-| PATCH | `/api/presence` | `PresenceUpdateDto`: `personId`, `courseId`, `date` e novo `status`. | 200 + presença |
+| POST | `/api/presence` | `AddPresenceDto`: `personId`, `courseClassId` e `status`. O curso vem da aula. | 201 + presença |
+| PATCH | `/api/presence` | `PresenceUpdateDto`: `personId`, `courseClassId` e novo `status`. | 200 + presença |
 | GET | `/api/presence/presence/{personId}` | Lista presenças da pessoa. | 200 + lista |
-| GET | `/api/presence` | **Corpo JSON** com `courseId` e `date`; filtra as presenças. | 200 + lista |
+| GET | `/api/presence` | **Corpo JSON** com `courseId` e `courseClassId`; filtra as presenças. | 200 + lista |
 | POST | `/api/register` | `AddRegisterDto`: `personCpf`, `courseOfInterestId` e `registerDate`. | 201 + inscrição |
 | GET | `/api/register/register/{cpf}` | Lista inscrições do CPF sem máscara. | 200 + lista |
 | GET | `/api/register` | **Corpo JSON** com `personCpf` e `courseOfInterestId`. | 200 + inscrição |
@@ -102,13 +102,15 @@ Turma (`POST /api/courseClass`), substituindo `42` pelo ID retornado no cadastro
 }
 ```
 
-Presença (`POST /api/presence`), usando IDs existentes de pessoa e curso:
+Presença (`POST /api/presence`), usando IDs existentes de pessoa e aula:
 
 ```json
-{"personId": 7, "courseId": 42, "data": "2026-10-01", "status": "PRESENT"}
+{"personId": 7, "courseClassId": 15, "status": "PRESENT"}
 ```
 
-Os status disponíveis são `PRESENT`, `ABSENT` e `JUSTIFIED`. Na criação, a chave é `data`; na atualização, no filtro e na resposta é `date`. Exemplo de atualização: `{"personId":7,"courseId":42,"date":"2026-10-01","status":"JUSTIFIED"}`.
+Os status disponíveis são `PRESENT`, `ABSENT` e `JUSTIFIED`. Criação e atualização identificam a presença por pessoa + aula, sem receber curso/data. O curso é obtido da aula na criação e o dia aparece em `courseClass.day` na resposta. Exemplo de atualização: `{"personId":7,"courseClassId":15,"status":"JUSTIFIED"}`. O GET de listagem recebe `{"courseId":42,"courseClassId":15}`; uma combinação incompatível retorna lista vazia. O DTO de filtro ainda conserva o nome `PresenceByDayAndCourseDto`, mas seu campo atual é `courseClassId`.
+
+`PresenceService` verifica pessoa/aula existentes e duplicidade na criação; criação e atualização executam em transação. A V5 exige `course_class_id`, sua chave estrangeira e unicidade de pessoa/aula. A atualização altera apenas o status. Ainda não há validação de inscrição da pessoa no curso. A coluna `course_id` de presença foi mantida e é preenchida a partir da aula; a consistência desse valor se o curso de uma aula for alterado depois ainda precisa de uma regra específica.
 
 Inscrição (`POST /api/register`), usando pessoa e curso existentes:
 
@@ -124,7 +126,7 @@ As respostas usam as entidades JPA diretamente. Um curso inclui `courseClass`; c
 
 JSON malformado, corpo obrigatório ausente e ID de caminho com formato inválido retornam 400; método HTTP não suportado retorna 405. Ainda não há tratamento global que traduza pessoa/curso inexistente, CPF inválido ou conflito no banco em respostas de negócio padronizadas, como 404/409. Também não há validação completa de campos com Bean Validation. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
 
-Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. Conflitos de horários e unicidade de presença continuam pendentes.
+Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. Conflitos de horários e validação de inscrição para registrar presença continuam pendentes; a unicidade pessoa/aula é garantida pela V5.
 
 ### Uma aula por curso e dia
 
@@ -134,10 +136,10 @@ A implementação ainda é parcial:
 
 - Nas alterações locais posteriores ao commit, a edição também consulta duplicidade, mas usa diretamente os campos do DTO antes de carregar a aula. Pode rejeitar a própria aula quando curso/dia são reenviados e deixar passar conflito num PATCH que omite um desses campos. Deve carregar a aula, combinar os valores enviados com os salvos e consultar excluindo o próprio ID.
 - A anotação `@UniqueConstraint` já foi corrigida localmente para as colunas `course_id` e `class_day`. Isso alinha o mapeamento, mas ainda falta a restrição no banco gerenciado por Flyway.
-- As migrações existentes não criam essa unicidade. Com `ddl-auto=validate`, a anotação não altera a tabela; a consulta prévia não impede duas inserções simultâneas. Ainda não existe V5 para essa regra.
+- As migrações existentes não criam essa unicidade. Com `ddl-auto=validate`, a anotação não altera a tabela; a consulta prévia não impede duas inserções simultâneas. A V5 trata o vínculo e a unicidade de presença, não a unicidade diária das aulas.
 - `course_id` e `class_day` continuam aceitando nulos no schema. A obrigatoriedade desses dados e a consistência entre dia e horários ainda precisam ser garantidas.
 
-A suíte existente passou com 132 testes em H2 em 30/09 às 14:20, incluindo as alterações locais do usuário (`target/one-class-per-day-final-tests.log`), mas ainda não testa duplicidade de aula, edição conflitante, escrita direta no banco ou concorrência. Esse resultado não comprova a regra completa. O assistente alterou documentação, sem modificar código/testes ou criar migração.
+A revisão inicial da regra diária teve 132 testes aprovados em H2 em 30/09 às 14:20 (`target/one-class-per-day-final-tests.log`). A execução posterior às 15:41 teve 144 testes aprovados, incluindo o vínculo de presença à aula e a V5 (`target/presence-fix-final-tests.log`). A cobertura de presença não comprova a unicidade diária de aulas: testes específicos de aulas duplicadas, edição conflitante e concorrência continuam pendentes.
 
 Referências: [`UniqueConstraint` em Jakarta Persistence](https://jakarta.ee/specifications/persistence/3.2/apidocs/jakarta.persistence/jakarta/persistence/uniqueconstraint) e [restrições do PostgreSQL](https://www.postgresql.org/docs/current/ddl-constraints.html).
 
@@ -167,11 +169,13 @@ O serviço de persistência recebe inscrições com pessoa e endereço novos, co
 
 ### Preparar o PostgreSQL
 
-Crie o banco e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica V1 a V4 em um schema vazio; em bancos com histórico, aplica as versões pendentes. A V2 separa `person` de `register` e transfere as deficiências para `person_disabilities`. A V3 cria `course`, `course_class` e `presence`. A V4 substitui o texto `course_of_interest` pela chave estrangeira obrigatória `course_id`, mantendo a unicidade de pessoa e curso. O Hibernate valida a estrutura (`ddl-auto=validate`); não use `create` ou `create-drop` no banco de trabalho.
+Crie o banco e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica V1 a V5 em um schema vazio; em bancos com histórico, aplica as versões pendentes. A V2 separa `person` de `register` e transfere as deficiências para `person_disabilities`. A V3 cria `course`, `course_class` e `presence`. A V4 substitui o texto `course_of_interest` pela chave estrangeira obrigatória `course_id`, mantendo a unicidade de pessoa e curso. A V5 vincula presença à aula. O Hibernate valida a estrutura (`ddl-auto=validate`); não use `create` ou `create-drop` no banco de trabalho.
 
 **Inscrições anteriores à V4:** cada texto antigo deve corresponder exatamente ao nome de um único curso já cadastrado. A migração Java `src/main/java/db/migration/V4__link_register_to_course.java` verifica todas as correspondências antes de alterar a tabela. Se não houver curso correspondente, se a grafia for diferente ou se houver nomes duplicados, a migração para com erro. Revise os vínculos e o catálogo no schema V3 antes de tentar novamente; nenhum curso é criado automaticamente e não é escolhido um ID arbitrário. Inscrições, datas, pessoas e endereços existentes são preservados. As migrações V1 a V3 permanecem inalteradas.
 
 A configuração compartilhada fica em `src/main/resources/application.yaml`; as credenciais continuam no `.properties` local. Todos os enums são persistidos pelo nome. Inscrição, pessoa e endereço têm IDs automáticos. O endereço é gravado por cascata com a pessoa, e o serviço associa a pessoa persistida à inscrição na mesma transação.
+
+**Presenças anteriores à V5:** `V5__link_presence_to_course_class` verifica se cada presença possui exatamente uma aula correspondente por curso/data e recusa presenças duplicadas da mesma pessoa/aula. Se houver ausência de aula, data nula ou correspondência ambígua, interrompe antes de alterar colunas/dados. Revise esses registros no schema V4; não são criadas aulas nem apagadas presenças automaticamente. Com dados válidos, preenche `course_class_id`, aplica `NOT NULL`, FK e `UNIQUE(person_id, course_class_id)`, substitui o índice de data/curso por aula/curso e remove a antiga coluna `date`. IDs, pessoas, cursos e status são preservados; o dia passa a ser obtido da aula. V1–V4 não foram reescritas.
 
 **Banco com tabelas antigas:** esta primeira migração cria a estrutura inicial; não converte automaticamente tabelas anteriores, IDs manuais ou enums numéricos. O Flyway recusa um schema não vazio sem histórico de migração. Para esse caso, é necessário preparar uma migração específica para a estrutura e os dados existentes. Não habilite `baseline-on-migrate` apenas para contornar esse erro.
 
@@ -293,6 +297,8 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 ```
 
 Os testes usam dados fictícios e não acessam o Google nem o PostgreSQL configurado no arquivo local. O perfil `test` usa H2 em memória e executa as mesmas migrações Flyway da aplicação, com validação do schema pelo Hibernate.
+
+Validação de 30/09/2026 às 15:41: `test` terminou com **144 testes aprovados**, sem falhas, erros ou ignorados (`target/presence-fix-final-tests.log`). `PresenceClassMigrationTests` cobre V4 → V5: preservação dos registros, correspondência exata de aula, restrições de unicidade/FK/obrigatoriedade e recusa de dados antigos inválidos antes de alterar colunas. Os testes de serviço e HTTP cobrem criação por pessoa/aula, atualização isolada entre aulas no mesmo dia e consulta por aula/curso. Também há cobertura de pessoa/aula inexistentes e duplicidade no serviço e no banco. Essa execução foi em H2; não é evidência de uma execução em PostgreSQL.
 
 `PersonDisabilitiesPersistenceTests` valida a gravação, leitura e atualização das deficiências da pessoa. Execute-o com `.\mvnw.cmd test "-Dtest=PersonDisabilitiesPersistenceTests"`.
 

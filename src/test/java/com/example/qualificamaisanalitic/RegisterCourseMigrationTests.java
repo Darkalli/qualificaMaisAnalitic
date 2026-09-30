@@ -102,7 +102,7 @@ class RegisterCourseMigrationTests {
     }
 
     private org.flywaydb.core.api.output.MigrateResult migrate() {
-        return Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).load().migrate();
+        return Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).target("4").load().migrate();
     }
 
     private int columnCount(String column) {

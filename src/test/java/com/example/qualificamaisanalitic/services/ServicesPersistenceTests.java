@@ -147,19 +147,23 @@ class ServicesPersistenceTests {
         entityManager.persist(person);
         entityManager.persist(firstCourse);
         entityManager.persist(secondCourse);
-        presences.addPresence(new AddPresenceDto(person.getId(), DAY, firstCourse.getId(), PresenceStatus.PRESENT));
-        presences.addPresence(new AddPresenceDto(person.getId(), DAY, secondCourse.getId(), PresenceStatus.ABSENT));
+        var firstClass = new CourseClass(DAY, "Manhã", DAY.atTime(8, 0), DAY.atTime(10, 0), firstCourse);
+        var secondClass = new CourseClass(DAY, "Tarde", DAY.atTime(14, 0), DAY.atTime(16, 0), secondCourse);
+        entityManager.persist(firstClass);
+        entityManager.persist(secondClass);
+        presences.addPresence(new AddPresenceDto(person.getId(), firstClass.getId(), PresenceStatus.PRESENT));
+        presences.addPresence(new AddPresenceDto(person.getId(), secondClass.getId(), PresenceStatus.ABSENT));
         entityManager.flush();
         entityManager.clear();
-        presences.updatePresence(new PresenceUpdateDto(person.getId(), DAY, PresenceStatus.JUSTIFIED, secondCourse.getId()));
+        presences.updatePresence(new PresenceUpdateDto(person.getId(), secondClass.getId(), PresenceStatus.JUSTIFIED));
         entityManager.flush();
         entityManager.clear();
         assertEquals(2, presences.getPresenceByPerson(person.getId()).size());
         assertEquals(PresenceStatus.PRESENT, presences.getPresenceByDateAndCourse(
-                new PresenceByDayAndCourseDto(firstCourse.getId(), DAY)).getFirst().getStatus());
+                new PresenceByDayAndCourseDto(firstCourse.getId(), firstClass.getId())).getFirst().getStatus());
         assertEquals(PresenceStatus.JUSTIFIED, presences.getPresenceByDateAndCourse(
-                new PresenceByDayAndCourseDto(secondCourse.getId(), DAY)).getFirst().getStatus());
+                new PresenceByDayAndCourseDto(secondCourse.getId(), secondClass.getId())).getFirst().getStatus());
         assertTrue(presences.getPresenceByDateAndCourse(
-                new PresenceByDayAndCourseDto(firstCourse.getId(), DAY.plusDays(1))).isEmpty());
+                new PresenceByDayAndCourseDto(firstCourse.getId(), secondClass.getId())).isEmpty());
     }
 }

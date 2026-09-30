@@ -5,11 +5,9 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.LocalDate;
-
 @Entity
-@Table(name = "presence", uniqueConstraints = @UniqueConstraint(name = "uk_presence_person_course_date",
-        columnNames = {"person_id", "course_id", "date"}))
+@Table(name = "presence", uniqueConstraints = @UniqueConstraint(name = "uk_presence_person_class",
+        columnNames = {"person_id", "course_class_id"}))
 @Getter
 @Setter
 public class Presence {
@@ -21,7 +19,9 @@ public class Presence {
     @JoinColumn(name = "person_id", nullable = false)
     private Person person;
 
-    private LocalDate date;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "course_class_id", nullable = false)
+    private CourseClass courseClass;
 
     @ManyToOne
     @JoinColumn(name = "course_id", nullable = false)
@@ -30,9 +30,9 @@ public class Presence {
     @Enumerated(EnumType.STRING)
     private PresenceStatus status;
 
-    public Presence(Person person, LocalDate date, Course course, PresenceStatus status) {
+    public Presence(Person person, CourseClass courseClass, Course course, PresenceStatus status) {
         this.person = person;
-        this.date = date;
+        this.courseClass = courseClass;
         this.course = course;
         this.status = status;
     }

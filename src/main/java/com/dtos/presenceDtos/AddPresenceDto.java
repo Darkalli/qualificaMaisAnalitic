@@ -2,7 +2,5 @@ package com.dtos.presenceDtos;
 
 import com.enums.PresenceStatus;
 
-import java.time.LocalDate;
-
-public record AddPresenceDto(Long personId, LocalDate data, Long courseId, PresenceStatus status) {
+public record AddPresenceDto(Long personId, Long courseClassId, PresenceStatus status) {
 }

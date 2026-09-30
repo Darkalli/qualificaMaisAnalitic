@@ -116,34 +116,36 @@ class ApiControllerTests {
     }
 
     @Test
-    void attendanceUsesDateCourseAndPersonAndUpdatesOnlySelectedCourse() throws Exception {
+    void attendanceUsesClassAndPersonAndUpdatesOnlySelectedCourse() throws Exception {
         long personId = id(createPerson("01234567890", "Pessoa Exemplo"));
         long courseId = id(createCourse("Curso A"));
         long otherCourseId = id(createCourse("Curso B"));
-        createClass(courseId);
-        for (long selectedId : new long[]{courseId, otherCourseId}) {
+        long classId = id(createClass(courseId));
+        long otherClassId = id(createClass(otherCourseId));
+        for (long[] selected : new long[][]{{classId, courseId}, {otherClassId, otherCourseId}}) {
             mvc.perform(post("/api/presence").contentType(APPLICATION_JSON).content("""
-                    {"personId":%d,"courseId":%d,"data":"2026-10-01","status":"PRESENT"}
-                    """.formatted(personId, selectedId)))
-                    .andExpect(status().isCreated()).andExpect(jsonPath("$.date").value("2026-10-01"))
+                    {"personId":%d,"courseClassId":%d,"status":"PRESENT"}
+                    """.formatted(personId, selected[0])))
+                    .andExpect(status().isCreated()).andExpect(jsonPath("$.courseClass.day").value("2026-10-01"))
+                    .andExpect(jsonPath("$.courseClass.id").value(selected[0]))
                     .andExpect(jsonPath("$.person.id").value(personId))
-                    .andExpect(jsonPath("$.course.id").value(selectedId));
+                    .andExpect(jsonPath("$.course.id").value(selected[1]));
         }
         mvc.perform(patch("/api/presence").contentType(APPLICATION_JSON).content("""
-                {"personId":%d,"courseId":%d,"date":"2026-10-01","status":"JUSTIFIED"}
-                """.formatted(personId, otherCourseId)))
+                {"personId":%d,"courseClassId":%d,"status":"JUSTIFIED"}
+                """.formatted(personId, otherClassId)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("JUSTIFIED"));
         mvc.perform(get("/api/presence/presence/{personId}", personId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
         mvc.perform(get("/api/presence").contentType(APPLICATION_JSON)
-                        .content("{\"courseId\":" + courseId + ",\"date\":\"2026-10-01\"}"))
+                        .content("{\"courseId\":" + courseId + ",\"courseClassId\":" + classId + "}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].status").value("PRESENT"));
         mvc.perform(get("/api/presence").contentType(APPLICATION_JSON)
-                        .content("{\"courseId\":" + otherCourseId + ",\"date\":\"2026-10-01\"}"))
+                        .content("{\"courseId\":" + otherCourseId + ",\"courseClassId\":" + otherClassId + "}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].status").value("JUSTIFIED"));
         mvc.perform(get("/api/presence").contentType(APPLICATION_JSON)
-                        .content("{\"courseId\":" + courseId + ",\"date\":\"2026-10-02\"}"))
+                        .content("{\"courseId\":" + courseId + ",\"courseClassId\":" + otherClassId + "}"))
                 .andExpect(status().isOk()).andExpect(content().json("[]"));
     }
 
@@ -164,7 +166,7 @@ class ApiControllerTests {
         mvc.perform(put("/api/course").contentType(APPLICATION_JSON).content("{}"))
                 .andExpect(status().isMethodNotAllowed());
         // O contrato atual exige JSON no GET; query parameters ainda não substituem o corpo.
-        mvc.perform(get("/api/presence").param("courseId", "1").param("date", "2026-10-01"))
+        mvc.perform(get("/api/presence").param("courseId", "1").param("courseClassId", "2"))
                 .andExpect(status().isBadRequest());
     }
 
