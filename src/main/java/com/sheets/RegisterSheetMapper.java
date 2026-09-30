@@ -1,6 +1,7 @@
 package com.sheets;
 
 import com.entities.Address;
+import com.entities.Course;
 import com.entities.Person;
 import com.entities.Register;
 import com.enums.Disabilities;
@@ -132,7 +133,22 @@ public class RegisterSheetMapper {
         person.setDisabilities(disabilities(cell(row, columns, Column.DISABILITIES)));
 
         register.setPerson(person);
-        register.setCourseOfInterest(cell(row, columns, Column.COURSE));
+        var course = new Course();
+        String courseId = cell(row, columns, Column.COURSE);
+        try {
+            if (!courseId.matches("[0-9]+")) {
+                throw new NumberFormatException();
+            }
+            long id = Long.parseLong(courseId);
+            if (id <= 0) {
+                throw new NumberFormatException();
+            }
+            course.setId(id);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("ID do curso: informe um inteiro positivo de um curso cadastrado.");
+        }
+        // A consulta ao catálogo ocorre na persistência; collect()/Quickstart não acessam o banco.
+        register.setCourseOfInterest(course);
         register.setRegisterDate(date(cell(row, columns, Column.REGISTER_DATE)));
         return register;
     }
@@ -238,7 +254,7 @@ public class RegisterSheetMapper {
         EDUCATION(true, "Escolaridade", "education"),
         WORK_STATE(true, "Situação de trabalho", "workState", "Situação profissional", "Trabalha atualmente?"),
         DISABILITIES(true, "Deficiência", "disabilities", "Deficiências"),
-        COURSE(true, "Curso de interesse", "courseOfInterest"),
+        COURSE(true, "ID do curso", "courseOfInterestId", "courseId", "Curso de interesse", "courseOfInterest"),
         REGISTER_DATE(true, "Data de cadastro", "registerDate", "Data de inscrição", "Data da inscrição");
 
         private final boolean required;

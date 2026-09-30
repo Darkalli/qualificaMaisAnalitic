@@ -2,11 +2,14 @@ package com.services;
 
 import com.dtos.registerDtos.AddRegisterDto;
 import com.dtos.registerDtos.SearchRegisterDto;
+import com.entities.Course;
 import com.entities.Register;
+import com.repositories.CourseRepository;
 import com.repositories.PersonRepository;
 import com.repositories.RegisterRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -15,21 +18,27 @@ public class RegisterService {
 
     private final RegisterRepository registerRepository;
     private final PersonRepository personRepository;
+    private final CourseRepository courseRepository;
 
-    public RegisterService(RegisterRepository registerRepository, PersonRepository personRepository) {
+    public RegisterService(RegisterRepository registerRepository, PersonRepository personRepository, CourseRepository courseRepository) {
         this.registerRepository = registerRepository;
         this.personRepository = personRepository;
+        this.courseRepository = courseRepository;
     }
 
+    @Transactional
     public void addRegister (AddRegisterDto registerDto){
+        Course course = courseRepository.findById(registerDto.courseOfInterestId())
+                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o Id: " + registerDto.courseOfInterestId()));
         registerRepository.save(new Register(personRepository.findByCpf(registerDto.personCpf())
                 .orElseThrow(() -> new EntityNotFoundException("Aluno(a) não encontrado(a) com o cpf: " + registerDto.personCpf())),
-                registerDto.courseOfInterest(), registerDto.registerDate()));
+                course, registerDto.registerDate()));
     }
 
+    @Transactional
     public void deleteRegister (SearchRegisterDto delete){
-        registerRepository.delete(registerRepository.findByPerson_CpfAndCourseOfInterest(delete.personCpf(), delete.courseOfInterest())
-                .orElseThrow(() -> new EntityNotFoundException("Registro não encontrado com o cpf: " + delete.personCpf() + "Ou o curso: " + delete.courseOfInterest())));
+        registerRepository.delete(registerRepository.findByPerson_CpfAndCourseOfInterest_Id(delete.personCpf(), delete.courseOfInterestId())
+                .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados.")));
     }
 
     public List<Register> getAllRegisterByCpf(String cpf){
@@ -37,7 +46,7 @@ public class RegisterService {
     }
 
     public Register getByPersonCpfAndCourseOfInterest (SearchRegisterDto registerDto){
-        return registerRepository.findByPerson_CpfAndCourseOfInterest(registerDto.personCpf(), registerDto.courseOfInterest())
-                .orElseThrow(() -> new EntityNotFoundException("Registro não encontrado com o cpf: " + registerDto.personCpf() + "Ou o curso: " + registerDto.courseOfInterest()));
+        return registerRepository.findByPerson_CpfAndCourseOfInterest_Id(registerDto.personCpf(), registerDto.courseOfInterestId())
+                .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados."));
     }
 }

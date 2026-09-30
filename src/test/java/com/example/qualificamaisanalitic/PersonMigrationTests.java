@@ -36,7 +36,8 @@ class PersonMigrationTests {
                     "Informática", LocalDate.of(2026, 9, 25));
             jdbc.update("insert into " + prefix + "register_disabilities (register_id, disability) values (901, 'HEARING'), (901, 'VISUAL')");
 
-            Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).load().migrate();
+            // Este cenário verifica especificamente V1 -> V2; a evolução V3 -> V4 tem teste próprio.
+            Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).target("2").load().migrate();
 
             var person = jdbc.queryForMap("select * from " + prefix + "person where cpf = '01234567890'");
             Long personId = ((Number) person.get("id")).longValue();

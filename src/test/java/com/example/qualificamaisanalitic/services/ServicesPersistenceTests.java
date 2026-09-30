@@ -120,8 +120,12 @@ class ServicesPersistenceTests {
         String cpf = "76543210900";
         people.addPerson(ServiceTestData.addPerson(cpf, "11999990000", null));
         var personId = people.getByCpf(cpf).orElseThrow().getId();
-        registers.addRegister(new AddRegisterDto(cpf, "Informática", DAY));
-        registers.addRegister(new AddRegisterDto(cpf, "Inglês", DAY));
+        var firstCourse = new Course("Informática", null, DAY, DAY.plusMonths(1));
+        var secondCourse = new Course("Inglês", null, DAY, DAY.plusMonths(1));
+        entityManager.persist(firstCourse);
+        entityManager.persist(secondCourse);
+        registers.addRegister(new AddRegisterDto(cpf, firstCourse.getId(), DAY));
+        registers.addRegister(new AddRegisterDto(cpf, secondCourse.getId(), DAY));
         entityManager.flush();
         entityManager.clear();
         var saved = registers.getAllRegisterByCpf(cpf);
@@ -130,7 +134,7 @@ class ServicesPersistenceTests {
         assertEquals(1L, entityManager.createQuery("select count(p) from Person p where p.cpf = :cpf", Long.class)
                 .setParameter("cpf", cpf).getSingleResult());
         assertThrows(DataIntegrityViolationException.class,
-                () -> registers.addRegister(new AddRegisterDto(cpf, "Informática", DAY.plusDays(1))));
+                () -> registers.addRegister(new AddRegisterDto(cpf, firstCourse.getId(), DAY.plusDays(1))));
     }
 
     @Test

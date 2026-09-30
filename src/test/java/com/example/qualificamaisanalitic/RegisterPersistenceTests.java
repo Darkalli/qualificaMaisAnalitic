@@ -2,6 +2,9 @@ package com.example.qualificamaisanalitic;
 
 import com.sheets.*;
 import com.entities.Register;
+import com.entities.Course;
+import com.repositories.CourseRepository;
+import jakarta.persistence.EntityNotFoundException;
 import com.enums.Disabilities;
 import com.repositories.RegisterRepository;
 import com.repositories.PersonRepository;
@@ -30,27 +33,35 @@ class RegisterPersistenceTests {
     @Autowired private RegisterPersistenceService persistence;
     @Autowired private RegisterRepository repository;
     @Autowired private PersonRepository people;
+    @Autowired private CourseRepository courses;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private TransactionTemplate transactions;
+    private Long firstCourseId;
+    private Long secondCourseId;
 
     @BeforeEach
     void clearTestDatabase() {
+        jdbc.update("delete from presence");
+        jdbc.update("delete from course_class");
         jdbc.update("delete from person_disabilities");
         jdbc.update("delete from register");
         jdbc.update("delete from person");
         jdbc.update("delete from address");
+        jdbc.update("delete from course");
+        firstCourseId = courses.saveAndFlush(new Course("Informática", "Descrição original", null, null)).getId();
+        secondCourseId = courses.saveAndFlush(new Course("Inglês", null, null, null)).getId();
     }
 
     @Test
     void savesCompleteRegistrationWithGeneratedIdsAndReloadsIt() {
-        var incoming = RegisterTestData.register("012.345.678-90");
+        var incoming = incoming("012.345.678-90");
         var result = persistence.persist(collection(incoming));
         assertEquals(1, result.inserted());
         assertNotNull(incoming.getId());
         assertNotNull(incoming.getPerson().getId());
         assertNotNull(incoming.getPerson().getAddress().getId());
         transactions.executeWithoutResult(status -> {
-            var saved = repository.findByPerson_CpfAndCourseOfInterest("01234567890", "Informática").orElseThrow();
+            var saved = repository.findByPerson_CpfAndCourseOfInterest_Id("01234567890", firstCourseId).orElseThrow();
             assertEquals("Pessoa Exemplo", saved.getPerson().getFullName());
             assertEquals("pessoa@example.com", saved.getPerson().getEmail());
             assertEquals("11999990000", saved.getPerson().getPersonalPhone());
@@ -64,7 +75,7 @@ class RegisterPersistenceTests {
             assertEquals(incoming.getPerson().getEducation(), saved.getPerson().getEducation());
             assertEquals(incoming.getPerson().getWorkState(), saved.getPerson().getWorkState());
             assertEquals(incoming.getRegisterDate(), saved.getRegisterDate());
-            assertEquals("Informática", saved.getCourseOfInterest());
+            assertEquals(firstCourseId, saved.getCourseOfInterest().getId());
             assertEquals(Set.of(Disabilities.HEARING, Disabilities.VISUAL), saved.getPerson().getDisabilities());
         });
         assertEquals("FEMALE", jdbc.queryForObject("select gender from person", String.class));
@@ -72,12 +83,12 @@ class RegisterPersistenceTests {
 
     @Test
     void repeatedAndReorderedImportsDoNotCreateRegistrationsOrOrphanAddresses() {
-        var first = persistence.persist(collection(RegisterTestData.register("012.345.678-90"),
-                RegisterTestData.register("12345678901"), RegisterTestData.register("01234567890")));
+        var first = persistence.persist(collection(incoming("012.345.678-90"),
+                incoming("12345678901"), incoming("01234567890")));
         assertEquals(2, first.inserted());
         assertEquals(1, first.unchanged());
-        var next = persistence.persist(collection(RegisterTestData.register("12345678901"),
-                RegisterTestData.register("01234567890")));
+        var next = persistence.persist(collection(incoming("12345678901"),
+                incoming("01234567890")));
         assertEquals(0, next.inserted());
         assertEquals(2, next.unchanged());
         assertEquals(2, repository.count());
@@ -87,8 +98,8 @@ class RegisterPersistenceTests {
 
     @Test
     void reportsChangesWithoutOverwritingSavedData() {
-        persistence.persist(collection(RegisterTestData.register("01234567890")));
-        var changed = RegisterTestData.register("01234567890");
+        persistence.persist(collection(incoming("01234567890")));
+        var changed = incoming("01234567890");
         changed.getPerson().setEmail("correcao@example.com");
         changed.getPerson().getAddress().setStreet("Outra rua");
         changed.getPerson().setDisabilities(Set.of(Disabilities.MOTOR));
@@ -106,7 +117,7 @@ class RegisterPersistenceTests {
     void preservesErrorsAndEmptyRowsWhileSavingValidRows() {
         var errors = List.of(new SheetImportResult.RowError(7, "CPF inválido"));
         var result = persistence.persist(new SheetImportResult(
-                List.of(RegisterTestData.register("01234567890")), errors, 2));
+                List.of(incoming("01234567890")), errors, 2));
         assertEquals(1, result.inserted());
         assertEquals(errors, result.errors());
         assertEquals(2, result.ignoredRows());
@@ -114,20 +125,20 @@ class RegisterPersistenceTests {
 
     @Test
     void databaseFailureRollsBackTheWholeBatchIncludingAddressesAndDisabilities() {
-        var invalid = RegisterTestData.register("12345678901");
+        var invalid = incoming("12345678901");
         invalid.getPerson().getAddress().setNumber(-1);
         assertThrows(DataIntegrityViolationException.class, () -> persistence.persist(
-                collection(RegisterTestData.register("01234567890"), invalid)));
+                collection(incoming("01234567890"), invalid)));
         assertEquals(0, repository.count());
         assertEquals(0, people.count());
         assertEquals(0, jdbc.queryForObject("select count(*) from address", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from person_disabilities", Integer.class));
-        assertEquals(1, persistence.persist(collection(RegisterTestData.register("01234567890"))).inserted());
+        assertEquals(1, persistence.persist(collection(incoming("01234567890"))).inserted());
     }
 
     @Test
     void databaseEnforcesCpfUniquenessEvenWhenBypassingImportService(CapturedOutput output) {
-        persistence.persist(collection(RegisterTestData.register("01234567890")));
+        persistence.persist(collection(incoming("01234567890")));
         assertThrows(DataIntegrityViolationException.class,
                 () -> people.saveAndFlush(PersonTestData.person("01234567890")));
         assertEquals(1, repository.count());
@@ -138,16 +149,16 @@ class RegisterPersistenceTests {
 
     @Test
     void rejectsUnnormalizedCpfAndExistingEntityIds() {
-        var invalid = RegisterTestData.register("01234567890");
+        var invalid = incoming("01234567890");
         invalid.getPerson().setCpf("012.345.678-90");
         assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(invalid)));
-        var identified = RegisterTestData.register("01234567890");
+        var identified = incoming("01234567890");
         identified.setId(99L);
         assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(identified)));
-        var identifiedPerson = RegisterTestData.register("01234567890");
+        var identifiedPerson = incoming("01234567890");
         identifiedPerson.getPerson().setId(99L);
         assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(identifiedPerson)));
-        var identifiedAddress = RegisterTestData.register("01234567890");
+        var identifiedAddress = incoming("01234567890");
         identifiedAddress.getPerson().getAddress().setId(99L);
         assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(identifiedAddress)));
         assertEquals(0, repository.count());
@@ -156,9 +167,9 @@ class RegisterPersistenceTests {
 
     @Test
     void reusesOnePersonAcrossDifferentCoursesAndReimportsWithoutDuplicates() {
-        var first = RegisterTestData.register("01234567890");
-        var second = RegisterTestData.register("01234567890");
-        second.setCourseOfInterest("Inglês");
+        var first = incoming("01234567890");
+        var second = incoming("01234567890");
+        second.setCourseOfInterest(courseReference(secondCourseId));
         var result = persistence.persist(collection(first, second));
         assertEquals(2, result.inserted());
         assertTrue(result.conflicts().isEmpty());
@@ -168,9 +179,9 @@ class RegisterPersistenceTests {
         assertEquals(1, jdbc.queryForObject("select count(*) from address", Integer.class));
         assertEquals(2, jdbc.queryForObject("select count(*) from person_disabilities", Integer.class));
 
-        var repeated = RegisterTestData.register("01234567890");
-        repeated.setCourseOfInterest("Inglês");
-        var reimport = persistence.persist(collection(repeated, RegisterTestData.register("01234567890")));
+        var repeated = incoming("01234567890");
+        repeated.setCourseOfInterest(courseReference(secondCourseId));
+        var reimport = persistence.persist(collection(repeated, incoming("01234567890")));
         assertEquals(0, reimport.inserted());
         assertEquals(2, reimport.unchanged());
         assertTrue(reimport.conflicts().isEmpty());
@@ -180,9 +191,9 @@ class RegisterPersistenceTests {
 
     @Test
     void newCoursePreservesTheExistingPersonAndReportsPersonalDataDifferences() {
-        persistence.persist(collection(RegisterTestData.register("01234567890")));
-        var incoming = RegisterTestData.register("01234567890");
-        incoming.setCourseOfInterest("Inglês");
+        persistence.persist(collection(incoming("01234567890")));
+        var incoming = incoming("01234567890");
+        incoming.setCourseOfInterest(courseReference(secondCourseId));
         incoming.getPerson().setEmail("alterado@example.com");
         var result = persistence.persist(collection(incoming));
         assertEquals(1, result.inserted());
@@ -196,9 +207,9 @@ class RegisterPersistenceTests {
 
     @Test
     void changedDateDoesNotCreateAnotherRegistrationForTheSameCourse() {
-        var original = RegisterTestData.register("01234567890");
+        var original = incoming("01234567890");
         persistence.persist(collection(original));
-        var changed = RegisterTestData.register("01234567890");
+        var changed = incoming("01234567890");
         changed.setRegisterDate(original.getRegisterDate().plusDays(1));
         var result = persistence.persist(collection(changed));
         assertEquals(0, result.inserted());
@@ -209,7 +220,7 @@ class RegisterPersistenceTests {
 
     @Test
     void databaseRejectsDuplicateCourseForTheSamePerson() {
-        var original = RegisterTestData.register("01234567890");
+        var original = incoming("01234567890");
         persistence.persist(collection(original));
         var duplicate = new Register(original.getPerson(), original.getCourseOfInterest(), original.getRegisterDate());
         assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(duplicate));
@@ -219,14 +230,94 @@ class RegisterPersistenceTests {
 
     @Test
     void rejectsMissingPersonOrAddressWithoutSavingPartialData() {
-        var noPerson = RegisterTestData.register("01234567890");
+        var noPerson = incoming("01234567890");
         noPerson.setPerson(null);
         assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(noPerson)));
-        var noAddress = RegisterTestData.register("01234567890");
+        var noAddress = incoming("01234567890");
         noAddress.getPerson().setAddress(null);
         assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(noAddress)));
         assertEquals(0, people.count());
         assertEquals(0, repository.count());
+    }
+
+    @Test
+    void courseRenameDoesNotCreateDuplicateOrOverwriteCatalog() {
+        var original = incoming("01234567890");
+        persistence.persist(collection(original));
+        var course = courses.findById(firstCourseId).orElseThrow();
+        course.setName("Informática básica");
+        courses.saveAndFlush(course);
+        var repeated = incoming("01234567890");
+        repeated.getCourseOfInterest().setName("Nome recebido que não deve ser salvo");
+        var result = persistence.persist(collection(repeated));
+        assertEquals(1, result.unchanged());
+        assertEquals(0, result.inserted());
+        assertTrue(result.conflicts().isEmpty());
+        assertEquals(1, repository.count());
+        assertEquals("Informática básica", courses.findById(firstCourseId).orElseThrow().getName());
+        assertEquals("Descrição original", courses.findById(firstCourseId).orElseThrow().getDescription());
+    }
+
+    @Test
+    void coursesWithSameNameRemainDifferentById() {
+        var otherCourse = courses.findById(secondCourseId).orElseThrow();
+        otherCourse.setName("Informática");
+        courses.saveAndFlush(otherCourse);
+        var first = incoming("01234567890");
+        var second = incoming("01234567890");
+        second.setCourseOfInterest(courseReference(secondCourseId));
+        assertEquals(2, persistence.persist(collection(first, second)).inserted());
+        assertEquals(1, people.count());
+        assertEquals(2, repository.count());
+    }
+
+    @Test
+    void unknownCourseRollsBackBatchWithoutCreatingCoursesOrPeople() {
+        var unknown = incoming("12345678901");
+        unknown.setCourseOfInterest(courseReference(Long.MAX_VALUE));
+        assertThrows(EntityNotFoundException.class,
+                () -> persistence.persist(collection(incoming("01234567890"), unknown)));
+        assertEquals(0, repository.count());
+        assertEquals(0, people.count());
+        assertEquals(0, jdbc.queryForObject("select count(*) from address", Integer.class));
+        assertEquals(0, jdbc.queryForObject("select count(*) from person_disabilities", Integer.class));
+        assertEquals(2, courses.count());
+    }
+
+    @Test
+    void rejectsMissingOrUnidentifiedCourseWithoutSaving() {
+        var row = incoming("01234567890");
+        row.setCourseOfInterest(null);
+        assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(row)));
+        row.setCourseOfInterest(new Course());
+        assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(row)));
+        row.getCourseOfInterest().setId(0L);
+        assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(row)));
+        assertEquals(0, repository.count());
+        assertEquals(0, people.count());
+    }
+
+    @Test
+    void databaseEnforcesRequiredAndExistingCourseWhenBypassingImport() {
+        var original = incoming("01234567890");
+        persistence.persist(collection(original));
+        assertThrows(DataIntegrityViolationException.class, () -> jdbc.update(
+                "insert into register (person_id, course_id, register_date) values (?, ?, ?)",
+                original.getPerson().getId(), Long.MAX_VALUE, original.getRegisterDate()));
+        assertThrows(DataIntegrityViolationException.class, () -> jdbc.update(
+                "insert into register (person_id, register_date) values (?, ?)",
+                original.getPerson().getId(), original.getRegisterDate()));
+        assertEquals(1, repository.count());
+    }
+
+    private Register incoming(String cpf) {
+        return RegisterTestData.register(cpf, firstCourseId);
+    }
+
+    private Course courseReference(Long id) {
+        var course = new Course();
+        course.setId(id);
+        return course;
     }
 
     private SheetImportResult collection(Register... registers) {

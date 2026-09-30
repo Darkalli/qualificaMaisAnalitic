@@ -150,7 +150,7 @@ class PersonTests {
     void listsPeopleSortedByRequestedField() {
         var people = List.of(ServiceTestData.person());
         when(repository.findAll(Sort.by(Sort.Direction.ASC, "fullName"))).thenReturn(people);
-        assertEquals(people, service.getAllPerson("fullName"));
+        assertEquals(people, service.getAllPerson());
     }
 
     @Test

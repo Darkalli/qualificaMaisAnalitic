@@ -1,6 +1,6 @@
 # Qualifica Mais Analitic
 
-Coleta e persistência de inscrições do Google Sheets no PostgreSQL usando `Register`, `Person` e `Address`.
+Coleta e persistência de inscrições do Google Sheets no PostgreSQL usando `Register`, `Person`, `Address` e cursos previamente cadastrados em `Course`.
 
 ## Estrutura
 
@@ -8,9 +8,9 @@ Coleta e persistência de inscrições do Google Sheets no PostgreSQL usando `Re
 - `RegisterSheetMapper`: identifica as colunas pelo cabeçalho e converte cada linha em `Register`, incluindo `Person` e seu `Address`.
 - `RegisterCollectionService.collect()`: coordena a leitura e retorna `SheetImportResult`.
 - `RegisterImportService.importRegisters()`: coleta a planilha e encaminha as linhas válidas para persistência.
-- `RegisterPersistenceService`: grava o lote em uma transação, reutiliza a pessoa por CPF e compara inscrições pelo curso de interesse.
+- `RegisterPersistenceService`: grava o lote em uma transação, reutiliza a pessoa por CPF e resolve o curso pelo ID do catálogo.
 - `PersonRepository`: consulta pessoas por CPF normalizado.
-- `RegisterRepository`: consulta inscrições por ID ou pelo CPF da pessoa e curso de interesse.
+- `RegisterRepository`: consulta inscrições por ID ou pelo CPF da pessoa e ID do curso.
 - `RegisterCollectionScheduler`: executa a importação periódica e registra o resumo, as divergências e os erros no log.
 - `SheetImportResult`: contém `registers` válidos, `errors` com o número da linha e a primeira falha encontrada nela, e `ignoredRows` para linhas vazias.
 - `SheetsProperties`: recebe a configuração local da coleta, compartilhada pelo Spring e pelo Quickstart.
@@ -20,7 +20,7 @@ A chamada `collect()` e o Quickstart continuam retornando objetos em memória, s
 
 ## Persistência atual e reimportação
 
-Existe uma pessoa por CPF normalizado e cada `Register` contém a pessoa, o curso de interesse e a data de inscrição. Cursos diferentes podem reutilizar a mesma pessoa. A comparação atual de curso usa o texto exato de `courseOfInterest`; ainda não existe catálogo de cursos ou validação de horários. A tabela abaixo descreve o comportamento da importação.
+Existe uma pessoa por CPF normalizado e cada `Register` contém a pessoa, uma referência obrigatória a `Course` e a data de inscrição. Cursos diferentes podem reutilizar a mesma pessoa. A identidade da inscrição é a combinação de pessoa e ID do curso (`person_id`, `course_id`); a data não faz parte dessa chave. Renomear um curso não cria outra inscrição, e cursos com nomes iguais continuam distintos pelos IDs. Ainda não há validação de conflitos de horários. A tabela abaixo descreve o comportamento da importação.
 
 | Situação | Comportamento implementado |
 | --- | --- |
@@ -33,16 +33,20 @@ Existe uma pessoa por CPF normalizado e cada `Register` contém a pessoa, o curs
 | Linha corrigida na planilha | Se antes era inválida, processa a pessoa e a inscrição conforme as regras acima. |
 | CPF corrigido para outro número | É considerado outra identidade e pode gerar novo cadastro; ainda não há vínculo estável com a inscrição da origem para reconciliar essa correção. |
 | Linha removida da planilha | Não exclui o cadastro do banco. |
+| ID do curso vazio, nome em texto ou número inválido | Descarta a linha e informa o erro de formato no relatório da coleta. |
+| ID válido no formato, mas inexistente no catálogo | Interrompe a persistência e reverte o lote inteiro; corrija o ID antes de reimportar. |
 
 Após a primeira gravação, o banco prevalece sobre a planilha. Divergências ficam no resultado da importação e no log; ainda não existe tela de resolução nem histórico persistido desses conflitos. As restrições `uk_person_cpf` e `uk_register_person_course` impedem duplicatas de pessoa e de inscrição no modelo atual. A ordem das linhas não é usada como identidade. Uma inscrição nova pode contar tanto em `inserted` quanto em `conflicts` quando os dados pessoais recebidos diferem dos salvos.
 
 Linhas inválidas são excluídas pelo mapper e continuam no relatório. As linhas válidas são gravadas em uma única transação: se qualquer gravação falhar, o lote inteiro é revertido, incluindo endereços e deficiências. Não há gravação parcial desse lote. Se duas instâncias tentarem inserir o mesmo CPF simultaneamente, a restrição única pode reverter um dos lotes; a próxima execução relê a planilha e compara os registros já gravados.
 
-O serviço de persistência recebe inscrições com pessoa e endereço novos, com CPF normalizado e sem IDs, produzidos pelo mapper. A consulta por CPF espera os 11 dígitos, sem máscara.
+O serviço de persistência recebe inscrições com pessoa e endereço novos, com CPF normalizado e sem IDs, produzidos pelo mapper. A referência ao curso deve conter o ID de um curso já cadastrado: a importação não cria nem atualiza cursos. A consulta por CPF espera os 11 dígitos, sem máscara. `AddRegisterDto` e `SearchRegisterDto` também usam `courseOfInterestId` (`Long`).
 
 ### Preparar o PostgreSQL
 
-Crie o banco e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica V1 e V2 em um schema vazio; em um banco já na V1, aplica somente a V2. A V2 separa `person` de `register`, transfere as deficiências para `person_disabilities` e preserva os IDs das inscrições, endereços e dados pessoais existentes. O Hibernate valida a estrutura (`ddl-auto=validate`); não use `create` ou `create-drop` no banco de trabalho.
+Crie o banco e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica V1 a V4 em um schema vazio; em bancos com histórico, aplica as versões pendentes. A V2 separa `person` de `register` e transfere as deficiências para `person_disabilities`. A V3 cria `course`, `course_class` e `presence`. A V4 substitui o texto `course_of_interest` pela chave estrangeira obrigatória `course_id`, mantendo a unicidade de pessoa e curso. O Hibernate valida a estrutura (`ddl-auto=validate`); não use `create` ou `create-drop` no banco de trabalho.
+
+**Inscrições anteriores à V4:** cada texto antigo deve corresponder exatamente ao nome de um único curso já cadastrado. A migração Java `src/main/java/db/migration/V4__link_register_to_course.java` verifica todas as correspondências antes de alterar a tabela. Se não houver curso correspondente, se a grafia for diferente ou se houver nomes duplicados, a migração para com erro. Revise os vínculos e o catálogo no schema V3 antes de tentar novamente; nenhum curso é criado automaticamente e não é escolhido um ID arbitrário. Inscrições, datas, pessoas e endereços existentes são preservados. As migrações V1 a V3 permanecem inalteradas.
 
 A configuração compartilhada fica em `src/main/resources/application.yaml`; as credenciais continuam no `.properties` local. Todos os enums são persistidos pelo nome. Inscrição, pessoa e endereço têm IDs automáticos. O endereço é gravado por cascata com a pessoa, e o serviço associa a pessoa persistida à inscrição na mesma transação.
 
@@ -77,10 +81,12 @@ Importe [modelo-cadastros.csv](docs/modelo-cadastros.csv) no Google Sheets usand
 | Escolaridade | `education` | Descrição, nome ou código de `Education` |
 | Situação de trabalho | `workState` | Descrição, nome ou código de `WorkState` |
 | Deficiência | `disabilities` | Uma ou mais descrições, nomes ou códigos de `Disabilities`, separados por vírgula, ponto e vírgula ou quebra de linha |
-| Curso de interesse | `courseOfInterest` | Texto |
+| ID do curso | `courseOfInterestId` | Inteiro positivo correspondente ao `id` de um curso cadastrado |
 | Data de cadastro | `registerDate` | `dd/MM/aaaa`, `dd/MM/aaaa HH:mm:ss`, `aaaa-MM-dd` ou data/hora ISO local |
 
 Como regra inicial, todos os campos acima são obrigatórios, exceto nome social e contato de familiar. Cabeçalhos e descrições dos enums ignoram maiúsculas, acentos, espaços e pontuação. Também são aceitos os nomes Java dos campos e aliases como `Carimbo de data/hora`, `Endereço de e-mail` e `Logradouro`. Para títulos diferentes do formulário, acrescente aliases em `RegisterSheetMapper.Column`.
+
+Na coluna `ID do curso`, informe, por exemplo, `42` se esse for o ID do curso desejado no banco. Os cabeçalhos `courseId`, `Curso de interesse` e `courseOfInterest` continuam aceitos como aliases, mas o conteúdo agora deve ser o ID, não o nome. Atualize as respostas existentes e a origem do formulário para fornecer esse valor. Não são aceitos zero, negativos, casas decimais, notação científica ou nomes. `collect()` e o Quickstart validam apenas o formato e retornam uma referência `Course` contendo o ID; a existência do curso é verificada por `importRegisters()` ao acessar o banco.
 
 O formulário também pode usar `Endereço (rua)`, `Trabalha atualmente?` e `Data da inscrição`. Quando a data de inscrição e o carimbo de data/hora existem juntos, a data de inscrição prevalece. O carimbo só é usado quando não existe uma coluna específica de data de inscrição/cadastro.
 
@@ -163,11 +169,11 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 .\mvnw.cmd test
 ```
 
-Os testes usam dados fictícios e não acessam o Google nem o PostgreSQL configurado no arquivo local. O perfil `test` usa H2 em memória e executa a mesma migração Flyway da aplicação, com validação do schema pelo Hibernate.
+Os testes usam dados fictícios e não acessam o Google nem o PostgreSQL configurado no arquivo local. O perfil `test` usa H2 em memória e executa as mesmas migrações Flyway da aplicação, com validação do schema pelo Hibernate.
 
 `PersonDisabilitiesPersistenceTests` valida a gravação, leitura e atualização das deficiências da pessoa. Execute-o com `.\mvnw.cmd test "-Dtest=PersonDisabilitiesPersistenceTests"`.
 
-`RegisterPersistenceTests` cobre gravação completa, IDs automáticos, CPF com zero inicial, inscrições diferentes para a mesma pessoa, reimportação, divergências, rollback, unicidade de CPF/inscrição e ausência de CPF nos logs de falha SQL. `PersonMigrationTests` cria dados no schema V1 e verifica as migrações seguintes, incluindo vínculos, deficiências e geração de novos IDs. `RegisterImportServiceTests` cobre a ligação entre coleta e persistência.
+`RegisterPersistenceTests` cobre gravação completa, IDs automáticos, CPF com zero inicial, inscrições diferentes para a mesma pessoa, reimportação, divergências, rollback, unicidade de CPF/inscrição e ausência de CPF nos logs de falha SQL. Também verifica cursos inexistentes, cursos de mesmo nome, renomeação e a chave estrangeira obrigatória. `PersonMigrationTests` verifica a evolução V1 → V2, incluindo vínculos, deficiências e geração de novos IDs. `RegisterCourseMigrationTests` verifica a evolução V3 → V4 com inscrições existentes, preservação de dados, novas restrições e recusa de cursos ausentes ou ambíguos antes de alterar a tabela. `RegisterSheetMapperTests` valida os IDs e aliases da planilha. `RegisterImportServiceTests` cobre a ligação entre coleta e persistência.
 
 Em `src/test/java/com/example/qualificamaisanalitic/services`, os testes de pessoa, curso, turma, presença e inscrição verificam cadastro, atualização parcial, consultas, exclusão e registros inexistentes. Os testes unitários usam repositórios simulados e os mappers reais gerados pelo MapStruct. `ServicesPersistenceTests` exercita os serviços com H2/Flyway, incluindo unicidade de inscrição, presenças em cursos diferentes no mesmo dia e atualização de deficiências sem uma transação aberta pelo chamador. Também verifica que uma atualização inválida não altera os dados salvos. `CoursePresencePersistenceTests` verifica os relacionamentos e a leitura das novas tabelas.
 

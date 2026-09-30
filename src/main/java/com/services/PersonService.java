@@ -27,26 +27,25 @@ public class PersonService {
         this.mapper = mapper;
     }
 
-    public void addPerson (AddPersonDto addPerson){
+    public Person addPerson (AddPersonDto addPerson){
         String cpf = formatCpf(addPerson.cpf());
         cpf = cleanCpf(cpf);
         String cellphone = formatPhone(addPerson.personalPhone());
         cellphone = normalizePhone(cellphone);
         String familyPhone = formatPhone(addPerson.familyPhone());
         familyPhone = normalizePhone(familyPhone);
-        personRepository.save(new Person(addPerson.fullName(), addPerson.socialName(), cpf ,
+        return personRepository.save(new Person(addPerson.fullName(), addPerson.socialName(), cpf ,
                 addPerson.email(), cellphone, addPerson.personalPhoneHasWhatsapp(),
                 familyPhone, addPerson.address(), addPerson.gender(), addPerson.education(),
                 addPerson.workState(),addPerson.disabilities()));
     }
 
     @Transactional
-    public void updatePerson (UpdatePersonDto updatePerson){
+    public Person updatePerson (UpdatePersonDto updatePerson){
         String cpf = formatCpf(updatePerson.Cpf());
         cpf = cleanCpf(cpf);
         Person person = personRepository.findByCpf(cpf)
                 .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
-        // Campos omitidos preservam os valores salvos, como no mapper de atualização parcial.
         String cellphone = updatePerson.personalPhone() == null
                 ? person.getPersonalPhone() : normalizePhone(updatePerson.personalPhone());
         String familyPhone = updatePerson.familyPhone() == null
@@ -55,7 +54,7 @@ public class PersonService {
         person.setCpf(cpf);
         person.setPersonalPhone(cellphone);
         person.setFamilyPhone(familyPhone);
-        personRepository.save(person);
+        return personRepository.save(person);
     }
 
    public void deletePerson (Long id){
@@ -63,13 +62,14 @@ public class PersonService {
        personRepository.delete(person);
    }
 
-   public List<Person> getAllPerson (String filter){
-        return personRepository.findAll(Sort.by(Sort.Direction.ASC, filter));
+   public List<Person> getAllPerson (){
+        return personRepository.getAll();
    }
 
-   public Optional<Person> getByCpf (String cpf){
+   public Person getByCpf (String cpf){
        String formatedCpf = formatCpf(cpf);
        formatedCpf = cleanCpf(formatedCpf);
-        return personRepository.findByCpf(formatedCpf);
+        return personRepository.findByCpf(formatedCpf)
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
    }
 }

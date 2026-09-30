@@ -4,6 +4,8 @@ import com.sheets.RegisterImportResult;
 import com.sheets.SheetImportResult;
 import com.entities.Register;
 import com.entities.Person;
+import com.repositories.CourseRepository;
+import jakarta.persistence.EntityNotFoundException;
 import com.repositories.PersonRepository;
 import com.repositories.RegisterRepository;
 import org.springframework.stereotype.Service;
@@ -17,13 +19,15 @@ import java.util.Objects;
 public class RegisterPersistenceService {
     private final RegisterRepository repository;
     private final PersonRepository people;
+    private final CourseRepository courses;
 
-    public RegisterPersistenceService(RegisterRepository repository, PersonRepository people) {
+    public RegisterPersistenceService(RegisterRepository repository, PersonRepository people, CourseRepository courses) {
         this.repository = repository;
         this.people = people;
+        this.courses = courses;
     }
 
-    /** Recebe somente os objetos novos e normalizados produzidos pelo mapper. */
+    /** Recebe pessoa/inscrição novas e normalizadas, com referência ao ID de um curso existente. */
     @Transactional
     public RegisterImportResult persist(SheetImportResult collection) {
         int inserted = 0;
@@ -39,14 +43,20 @@ public class RegisterPersistenceService {
                     || incomingPerson.getAddress().getId() != null) {
                 throw new IllegalArgumentException("A importação requer inscrição, pessoa e endereço novos, sem IDs.");
             }
+            if (incoming.getCourseOfInterest() == null || incoming.getCourseOfInterest().getId() == null
+                    || incoming.getCourseOfInterest().getId() <= 0) {
+                throw new IllegalArgumentException("A importação requer o ID positivo de um curso cadastrado.");
+            }
+            var savedCourse = courses.findById(incoming.getCourseOfInterest().getId())
+                    .orElseThrow(() -> new EntityNotFoundException("Curso informado na importação não encontrado."));
             Person savedPerson = people.findByCpf(incomingPerson.getCpf())
                     .orElseGet(() -> people.save(incomingPerson));
             var fields = differences(savedPerson, incomingPerson);
-            // O curso ainda é texto no modelo atual; não há catálogo ou horários nesta etapa.
-            var existing = repository.findByPerson_CpfAndCourseOfInterest(
-                    savedPerson.getCpf(), incoming.getCourseOfInterest());
+            var existing = repository.findByPerson_CpfAndCourseOfInterest_Id(
+                    savedPerson.getCpf(), savedCourse.getId());
             if (existing.isEmpty()) {
                 incoming.setPerson(savedPerson);
+                incoming.setCourseOfInterest(savedCourse);
                 repository.save(incoming);
                 inserted++;
                 if (!fields.isEmpty()) {

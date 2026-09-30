@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface RegisterRepository extends JpaRepository<Register, Long> {
-    Optional<Register> findByPerson_CpfAndCourseOfInterest(String cpf, String courseOfInterest);
+    Optional<Register> findByPerson_CpfAndCourseOfInterest_Id(String cpf, Long courseId);
 
     List<Register> findByPerson_Cpf(String cpf);
 }

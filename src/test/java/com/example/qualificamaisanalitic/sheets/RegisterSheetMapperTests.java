@@ -28,7 +28,7 @@ class RegisterSheetMapperTests {
     private List<Object> row() {
         return new ArrayList<>(List.of("Pessoa Exemplo", "", "012.345.678-90", "pessoa@example.com",
                 "Rua Exemplo", "42", "Centro", "Feminino", "Ensino Médio Completo",
-                "Não, somente estudo", "Nenhuma", "Informática", "24/09/2026 13:45:10",
+                "Não, somente estudo", "Nenhuma", "42", "24/09/2026 13:45:10",
                 "(11) 99999-0000", "Sim", "(11) 3333-0000"));
     }
 
@@ -55,7 +55,8 @@ class RegisterSheetMapperTests {
         assertEquals(Education.HIGH_SCHOOL_COMPLETE, register.getPerson().getEducation());
         assertEquals(WorkState.ONLY_STUDYING, register.getPerson().getWorkState());
         assertEquals(Set.of(Disabilities.NONE), register.getPerson().getDisabilities());
-        assertEquals("Informática", register.getCourseOfInterest());
+        assertEquals(42L, register.getCourseOfInterest().getId());
+        assertNull(register.getCourseOfInterest().getName());
         assertEquals(LocalDate.of(2026, 9, 24), register.getRegisterDate());
     }
 
@@ -332,5 +333,32 @@ class RegisterSheetMapperTests {
         assertTrue(mapper.map(List.of(), 1).errors().isEmpty());
         assertTrue(mapper.map(List.of(header()), 1).registers().isEmpty());
         assertThrows(IllegalArgumentException.class, () -> mapper.map(List.of(), 0));
+    }
+
+    @Test
+    void acceptsExplicitCourseIdHeadersAndRejectsDuplicateAliases() {
+        for (String title : List.of("ID do curso", "courseId", "courseOfInterestId")) {
+            var header = header();
+            header.set(11, title);
+            var row = row();
+            row.set(11, 42L);
+            assertEquals(42L, mapper.map(List.of(header, row), 1).registers().getFirst().getCourseOfInterest().getId());
+        }
+        var duplicate = header();
+        duplicate.add("ID do curso");
+        assertThrows(IllegalArgumentException.class, () -> mapper.map(List.of(duplicate, row()), 1));
+    }
+
+    @Test
+    void rejectsNamesInvalidIdsAndOverflowWithoutDiscardingOtherRows() {
+        for (String value : List.of("Informática", "0", "-1", "1.5", "1.0", "1e3", "abc", "9223372036854775808", "")) {
+            var invalid = row();
+            invalid.set(11, value);
+            var result = mapper.map(List.of(header(), invalid, row()), 5);
+            assertEquals(1, result.registers().size(), value);
+            assertEquals(1, result.errors().size(), value);
+            assertEquals(6, result.errors().getFirst().row());
+            assertTrue(result.errors().getFirst().message().contains("ID do curso"));
+        }
     }
 }
