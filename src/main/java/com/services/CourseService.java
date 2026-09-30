@@ -23,14 +23,14 @@ public class CourseService {
         this.mapper = mapper;
     }
 
-    public void addCourse (AddCourseDto courseDto){
-        courseRepository.save(new Course(courseDto.name(), courseDto.description(),courseDto.start(), courseDto.finish()));
+    public Course addCourse (AddCourseDto courseDto){
+        return courseRepository.save(new Course(courseDto.name(), courseDto.description(),courseDto.start(), courseDto.finish()));
     }
-    public void updateCourse (Long courseId, UpdateCourseDto courseDto){
-        Course course = courseRepository.findByid(courseId)
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
+    public Course updateCourse (UpdateCourseDto courseDto){
+        Course course = courseRepository.findByid(courseDto.courseId())
+                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
         mapper.updateCoursefromDto(courseDto, course);
-        courseRepository.save(course);
+        return courseRepository.save(course);
     }
 
     public void deleteCourse(Long courseId){
@@ -41,7 +41,8 @@ public class CourseService {
         return courseRepository.findAll();
     }
 
-    public Optional<Course> getCourseByName(String courseName){
-        return courseRepository.findByName(courseName);
+    public Course getCourseByName(String courseName){
+        return courseRepository.findByName(courseName)
+                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
     }
 }
