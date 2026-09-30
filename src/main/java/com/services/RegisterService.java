@@ -27,10 +27,10 @@ public class RegisterService {
     }
 
     @Transactional
-    public void addRegister (AddRegisterDto registerDto){
+    public Register addRegister (AddRegisterDto registerDto){
         Course course = courseRepository.findById(registerDto.courseOfInterestId())
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o Id: " + registerDto.courseOfInterestId()));
-        registerRepository.save(new Register(personRepository.findByCpf(registerDto.personCpf())
+        return registerRepository.save(new Register(personRepository.findByCpf(registerDto.personCpf())
                 .orElseThrow(() -> new EntityNotFoundException("Aluno(a) não encontrado(a) com o cpf: " + registerDto.personCpf())),
                 course, registerDto.registerDate()));
     }
