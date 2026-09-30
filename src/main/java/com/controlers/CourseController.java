@@ -23,7 +23,7 @@ public class CourseController {
 
     @PostMapping
     public ResponseEntity<Course> createCourse(AddCourseDto courseDto){
-        return ResponseEntity.status(HttpStatus.CREATED).body(courseService.addCourse(courseDto););
+        return ResponseEntity.status(HttpStatus.CREATED).body(courseService.addCourse(courseDto));
     }
 
     @PatchMapping
@@ -43,7 +43,7 @@ public class CourseController {
     }
 
     @GetMapping("/course/{name}")
-    public ResponseEntity<Course> getCourseById(String name){
+    public ResponseEntity<Course> getCourseByName(String name){
         return ResponseEntity.ok(courseService.getCourseByName(name));
     }
 

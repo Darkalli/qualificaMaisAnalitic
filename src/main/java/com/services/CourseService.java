@@ -3,14 +3,12 @@ package com.services;
 import com.dtos.CourseDtos.AddCourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.entities.Course;
-import com.entities.Person;
 import com.mappers.CourseMapper;
 import com.repositories.CourseRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class CourseService {

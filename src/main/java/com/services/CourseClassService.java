@@ -25,16 +25,16 @@ public class CourseClassService {
         this.mapper = mapper;
     }
 
-    public void addCourseClass(AddCourseClassDto courseClassDto){
-        courseClassRepository.save(new CourseClass(courseClassDto.day(), courseClassDto.session(),
+    public CourseClass addCourseClass(AddCourseClassDto courseClassDto){
+        return courseClassRepository.save(new CourseClass(courseClassDto.day(), courseClassDto.session(),
                 courseClassDto.start(), courseClassDto.finish(), courseClassDto.course()));
     }
 
-    public void updateCourseClass(UpdateCourseClassDto updateCourseClassDto){
+    public CourseClass updateCourseClass(UpdateCourseClassDto updateCourseClassDto){
         CourseClass courseClass = courseClassRepository.findById(updateCourseClassDto.classId())
                 .orElseThrow(() -> new EntityNotFoundException("Turma não encontrada com o ID: " + updateCourseClassDto.classId()));
         mapper.updateCourseClassfromDto(updateCourseClassDto,courseClass);
-        courseClassRepository.save(courseClass);
+        return courseClassRepository.save(courseClass);
     }
 
     public void deleteCourseClass(Long id){
@@ -42,7 +42,7 @@ public class CourseClassService {
                 .orElseThrow(() -> new EntityNotFoundException("Turma não encontrada com o ID: " + id)));
     }
 
-    public List<CourseClass> allClassesByCourse(Long courseId){
+    public List<CourseClass> allClassesByCourseId(Long courseId){
         Course course = courseRepository.findByid(courseId)
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o ID: " + courseId));
         return courseClassRepository.findByCourse(course);
