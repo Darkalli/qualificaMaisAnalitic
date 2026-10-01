@@ -3,6 +3,7 @@ package com.services;
 import com.dtos.personDtos.AddPersonDto;
 import com.dtos.personDtos.UpdatePersonDto;
 import com.entities.Person;
+import com.enums.Disabilities;
 import com.mappers.PersonMapper;
 import com.repositories.PersonRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -10,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Set;
 
 import static com.utils.CpfUtils.*;
 import static com.utils.CellphoneUtils.*;
@@ -28,14 +31,14 @@ public class PersonService {
     public Person addPerson (AddPersonDto addPerson){
         String cpf = formatCpf(addPerson.cpf());
         cpf = cleanCpf(cpf);
-        String cellphone = formatPhone(addPerson.personalPhone());
-        cellphone = normalizePhone(cellphone);
-        String familyPhone = formatPhone(addPerson.familyPhone());
-        familyPhone = normalizePhone(familyPhone);
+        String cellphone = cleanPhone(addPerson.personalPhone());
+        String familyPhone = cleanPhone(addPerson.familyPhone());
+        Set<Disabilities> newDisabilities = Disabilities.processAndValidateDisabilities(
+                addPerson.disabilities() == null ? null : new ArrayList<>(addPerson.disabilities()));
         return personRepository.save(new Person(addPerson.fullName(), addPerson.socialName(), cpf ,
                 addPerson.email(), cellphone, addPerson.personalPhoneHasWhatsapp(),
                 familyPhone, addPerson.address(), addPerson.gender(), addPerson.education(),
-                addPerson.workState(),addPerson.disabilities()));
+                addPerson.workState(),newDisabilities));
     }
 
     @Transactional
@@ -45,10 +48,15 @@ public class PersonService {
         Person person = personRepository.findByCpf(cpf)
                 .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
         String cellphone = updatePerson.personalPhone() == null
-                ? person.getPersonalPhone() : normalizePhone(updatePerson.personalPhone());
+                ? person.getPersonalPhone() : cleanPhone(updatePerson.personalPhone());
         String familyPhone = updatePerson.familyPhone() == null
-                ? person.getFamilyPhone() : normalizePhone(updatePerson.familyPhone());
+                ? person.getFamilyPhone() : cleanPhone(updatePerson.familyPhone());
+        Set<Disabilities> newDisabilities = updatePerson.disabilities() == null ? null
+                : Disabilities.processAndValidateDisabilities(new ArrayList<>(updatePerson.disabilities()));
         mapper.updatePersonfromDto(updatePerson, person);
+        if (newDisabilities != null) {
+            person.setDisabilities(newDisabilities);
+        }
         person.setCpf(cpf);
         person.setPersonalPhone(cellphone);
         person.setFamilyPhone(familyPhone);

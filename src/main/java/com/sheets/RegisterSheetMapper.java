@@ -17,13 +17,15 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.ArrayList;
-import java.util.EnumSet;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import static com.utils.CpfUtils.*;
+import static com.utils.CellphoneUtils.*;
 
 @Component
 public class RegisterSheetMapper {
@@ -103,10 +105,13 @@ public class RegisterSheetMapper {
         person.setFullName(cell(row, columns, Column.FULL_NAME));
         person.setSocialName(cell(row, columns, Column.SOCIAL_NAME));
         String cpf = cell(row, columns, Column.CPF);
-        if (!cpf.matches("[0-9]{11}|[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}")) {
-            throw new IllegalArgumentException("CPF: informe 11 dígitos, com ou sem a máscara 000.000.000-00.");
+        cpf = formatCpf(cpf);
+        if (cpf == null || cpf.length() != 11) {
+            throw new IllegalArgumentException("CPF deve conter 11 dígitos.");
+        }else {
+            cpf = cleanCpf(cpf);
+            person.setCpf(cpf);
         }
-        person.setCpf(cpf.replaceAll("[.-]", ""));
         person.setEmail(cell(row, columns, Column.EMAIL));
         person.setPersonalPhone(phone(cell(row, columns, Column.PERSONAL_PHONE), Column.PERSONAL_PHONE));
         person.setPersonalPhoneHasWhatsapp(whatsapp(cell(row, columns, Column.PERSONAL_PHONE_HAS_WHATSAPP)));
@@ -167,44 +172,22 @@ public class RegisterSheetMapper {
     }
 
     private Set<Disabilities> disabilities(String value) {
-        var selected = EnumSet.noneOf(Disabilities.class);
-        // A barra de Física/Motora faz parte da descrição, não é um separador.
-        for (String item : value.split(",|;|\\R", -1)) {
-            selected.add(enumValue(item.strip(), Disabilities.values(),
-                    Disabilities::getCode, Disabilities::getDescription, Column.DISABILITIES));
+        // A barra de Física/Motora pertence à descrição; não é separador.
+        var items = Arrays.stream(value.split(",|;|\\R", -1)).map(String::strip).toList();
+        if (items.stream().anyMatch(String::isBlank)) {
+            throw new IllegalArgumentException("Deficiência: opção vazia entre separadores.");
         }
-        if (selected.size() > 1 && (selected.contains(Disabilities.NONE)
-                || selected.contains(Disabilities.NO_DECLARATION))) {
-            throw new IllegalArgumentException("Deficiência: Nenhuma e Sem Declaração devem ser informadas isoladamente.");
+        try {
+            return Disabilities.processAndValidateDisabilities(items);
+        } catch (IllegalArgumentException exception) {
+            // O enum pode incluir a entrada na mensagem; o relatório de importação não deve expô-la.
+            throw new IllegalArgumentException("Deficiência: valor desconhecido ou combinação inválida. "
+                    + "Use descrição, nome ou código; Nenhuma e Sem Declaração devem ser informadas isoladamente.");
         }
-        return selected;
-    }
-
-    private String phone(String value, Column column) {
-        if (value == null) {
-            return null;
-        }
-        // Mantém telefone como texto; aceita máscara e o prefixo explícito +55.
-        String digits = value.replaceAll("[\\s().-]", "");
-        if (digits.startsWith("+55")) {
-            digits = digits.substring(3);
-        }
-        if (!digits.matches("[1-9][0-9]{9,10}")) {
-            throw new IllegalArgumentException(column.label + ": informe um telefone com DDD, de 10 ou 11 dígitos.");
-        }
-        return digits;
-    }
-
-    private Boolean whatsapp(String value) {
-        return switch (normalize(value)) {
-            case "sim", "true" -> true;
-            case "nao", "false" -> false;
-            default -> throw new IllegalArgumentException("O contato informado possui WhatsApp?: informe Sim ou Não.");
-        };
     }
 
     private <E extends Enum<E>> E enumValue(String value, E[] options, Function<E, Integer> code,
-                                            Function<E, String> description, Column column) {
+                                            Function<E, String> description, RegisterSheetMapper.Column column) {
         String normalized = normalize(value);
         for (E option : options) {
             if (normalized.equals(normalize(option.name()))
@@ -214,6 +197,21 @@ public class RegisterSheetMapper {
             }
         }
         throw new IllegalArgumentException(column.label + ": valor não reconhecido; use a descrição, o nome ou o código do enum.");
+    }
+
+    private String phone(String value, Column column) {
+        if (value == null) {
+            return null;
+        }
+        return cleanPhone(value);
+    }
+
+    private Boolean whatsapp(String value) {
+        return switch (normalize(value)) {
+            case "sim", "true" -> true;
+            case "nao", "false" -> false;
+            default -> throw new IllegalArgumentException("O contato informado possui WhatsApp?: informe Sim ou Não.");
+        };
     }
 
     private LocalDate date(String value) {

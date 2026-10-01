@@ -194,12 +194,31 @@ class RegisterSheetMapperTests {
     }
 
     @Test
-    void rejectsMalformedCpfAndNonNumericAddressNumber() {
-        for (Object cpf : List.of("1234567890", "01234567890abc", "")) {
+    void acceptsCpfWithNonNumericCharactersWhenCleaningLeavesElevenDigits() {
+        for (String cpf : List.of("01234567890", "012.345.678-90", "01234567890abc", "abc 012.345.678-90")) {
             var row = row();
             row.set(2, cpf);
-            assertTrue(mapper.map(List.of(header(), row), 1).errors().getFirst().message().contains("CPF"));
+            var result = mapper.map(List.of(header(), row), 1);
+            assertTrue(result.errors().isEmpty(), cpf);
+            assertEquals(1, result.registers().size(), cpf);
+            assertEquals("01234567890", result.registers().getFirst().getPerson().getCpf());
         }
+    }
+
+    @Test
+    void rejectsCpfWithIncorrectDigitCountAfterCleaning() {
+        for (String cpf : List.of("1234567890", "1234567890abc", "012345678901abc", "abc", "")) {
+            var row = row();
+            row.set(2, cpf);
+            var result = mapper.map(List.of(header(), row), 1);
+            assertTrue(result.registers().isEmpty(), cpf);
+            assertEquals(1, result.errors().size(), cpf);
+            assertTrue(result.errors().getFirst().message().contains("CPF"), cpf);
+        }
+    }
+
+    @Test
+    void rejectsNonNumericOrOutOfRangeAddressNumber() {
         for (Object number : List.of("s/n", "-1", "2147483648", "1.5")) {
             var row = row();
             row.set(5, number);
@@ -247,7 +266,7 @@ class RegisterSheetMapperTests {
 
     @Test
     void rejectsMissingPersonalPhoneEvenWithoutWhatsappAndInvalidPhoneFormats() {
-        for (String phone : List.of("", "99999-0000", "(11) telefone", "119999900001", "+1 11999990000", "01 99999-0000")) {
+        for (String phone : List.of("", "99999-0000", "(11) telefone", "119999900001", "+1 11999990000", "01 99999-0000", "11999990000abc")) {
             var row = row();
             row.set(13, phone);
             row.set(14, "Não");
@@ -325,6 +344,17 @@ class RegisterSheetMapperTests {
             assertEquals(2, result.errors().getFirst().row());
             assertTrue(result.errors().getFirst().message().contains("Deficiência"));
         }
+    }
+
+    @Test
+    void doesNotExposeUnknownDisabilityValueInRowErrors() {
+        var row = row();
+        row.set(10, "texto-pessoal-invalido");
+        var result = mapper.map(List.of(header(), row), 1);
+        assertTrue(result.registers().isEmpty());
+        assertEquals(1, result.errors().size());
+        assertTrue(result.errors().getFirst().message().contains("Deficiência"));
+        assertFalse(result.errors().getFirst().message().contains("texto-pessoal-invalido"));
     }
 
     @Test
