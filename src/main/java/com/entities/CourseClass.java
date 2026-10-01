@@ -19,13 +19,13 @@ public class CourseClass {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "class_day")
+    @Column(name = "class_day", nullable = false)
     private LocalDate day;
     private String session;
     private LocalDateTime start;
     private LocalDateTime finish;
-    @ManyToOne
-    @JoinColumn(name = "course_id")
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "course_id", nullable = false)
     @JsonIgnoreProperties("courseClass")
     private Course course;
 

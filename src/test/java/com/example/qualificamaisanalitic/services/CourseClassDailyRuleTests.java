@@ -18,7 +18,7 @@ import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** A checagem do serviço não substitui a restrição diária ainda pendente nas migrações. */
+/** Verifica a validação do serviço; a V1 também impõe a regra diária no banco. */
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional

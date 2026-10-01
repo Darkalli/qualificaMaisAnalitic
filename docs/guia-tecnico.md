@@ -110,7 +110,7 @@ Presença (`POST /api/presence`), usando IDs existentes de pessoa e aula:
 
 Os status disponíveis são `PRESENT`, `ABSENT` e `JUSTIFIED`. Criação e atualização identificam a presença por pessoa + aula, sem receber curso/data. O curso é obtido da aula na criação e o dia aparece em `courseClass.day` na resposta. Exemplo de atualização: `{"personId":7,"courseClassId":15,"status":"JUSTIFIED"}`. O GET de listagem recebe `{"courseId":42,"courseClassId":15}`; uma combinação incompatível retorna lista vazia. O DTO de filtro ainda conserva o nome `PresenceByDayAndCourseDto`, mas seu campo atual é `courseClassId`.
 
-`PresenceService` verifica pessoa/aula existentes e duplicidade na criação; criação e atualização executam em transação. A V5 exige `course_class_id`, sua chave estrangeira e unicidade de pessoa/aula. A atualização altera apenas o status. Ainda não há validação de inscrição da pessoa no curso. A coluna `course_id` de presença foi mantida e é preenchida a partir da aula; a consistência desse valor se o curso de uma aula for alterado depois ainda precisa de uma regra específica.
+`PresenceService` verifica pessoa/aula existentes e duplicidade na criação; criação e atualização executam em transação. A V1 exige `course_class_id`, sua chave estrangeira e unicidade de pessoa/aula. A atualização altera apenas o status. Ainda não há validação de inscrição da pessoa no curso. A coluna `course_id` de presença é preenchida a partir da aula; a consistência desse valor se o curso de uma aula for alterado depois ainda precisa de uma regra específica.
 
 Inscrição (`POST /api/register`), usando pessoa e curso existentes:
 
@@ -126,20 +126,20 @@ As respostas usam as entidades JPA diretamente. Um curso inclui `courseClass`; c
 
 JSON malformado, corpo obrigatório ausente e ID de caminho com formato inválido retornam 400; método HTTP não suportado retorna 405. Ainda não há tratamento global que traduza pessoa/curso inexistente, CPF inválido ou conflito no banco em respostas de negócio padronizadas, como 404/409. Também não há validação completa de campos com Bean Validation. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
 
-Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. Conflitos de horários e validação de inscrição para registrar presença continuam pendentes; a unicidade pessoa/aula é garantida pela V5.
+Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. Compartilhar a checagem de horários com a importação e validar inscrição para registrar presença continuam pendentes; a unicidade pessoa/aula é garantida pela V1.
 
 ### Uma aula por curso e dia
 
 No commit `d8fede8`, a criação de `CourseClass` passou a consultar `existsByCourseAndDay(course, day)` e a lançar `IllegalArgumentException` quando encontra uma aula desse curso na mesma data. A regra é por **ID de curso e dia**, independentemente da sessão/horário. Cursos diferentes podem ter aula no mesmo dia, e o mesmo curso pode ter aulas em dias diferentes.
 
-A implementação ainda é parcial:
+A regra é aplicada no serviço e no banco:
 
 - A edição carrega a aula, combina os valores enviados no PATCH com os salvos e consulta duplicidade excluindo o próprio ID. Reenviar curso/dia da própria aula é permitido; alterar somente curso ou dia também verifica a combinação final antes de modificar campos.
-- A anotação `@UniqueConstraint` já foi corrigida localmente para as colunas `course_id` e `class_day`. Isso alinha o mapeamento, mas ainda falta a restrição no banco gerenciado por Flyway.
-- As migrações existentes não criam essa unicidade. Com `ddl-auto=validate`, a anotação não altera a tabela; a consulta prévia não impede duas inserções simultâneas. A V5 trata o vínculo e a unicidade de presença, não a unicidade diária das aulas.
-- `course_id` e `class_day` continuam aceitando nulos no schema. A obrigatoriedade desses dados e a consistência entre dia e horários ainda precisam ser garantidas.
+- A V1 cria `UNIQUE(course_id, class_day)` e `NOT NULL` nas duas colunas. O mapeamento JPA declara as mesmas restrições e o Hibernate valida o schema.
+- A restrição no banco também impede duplicatas em gravações diretas e simultâneas.
+- A consistência entre dia e horários, horários desconhecidos e reagendamento continuam dependendo de regras adicionais.
 
-`CourseClassServiceTests` e `CourseClassDailyRuleTests` cobrem criação duplicada, cursos/dias diferentes, atualização da própria aula e PATCH parcial conflitante ou permitido. A garantia diária no banco, sua migração e a proteção contra criação concorrente de aulas continuam pendentes.
+`CourseClassServiceTests` e `CourseClassDailyRuleTests` cobrem criação duplicada, cursos/dias diferentes, atualização da própria aula e PATCH parcial conflitante ou permitido. `InitialSchemaMigrationTests` verifica escrita direta, nulos e referências ausentes; `ConcurrentPersistenceTests` verifica duas transações disputando o mesmo curso/dia.
 
 Referências: [`UniqueConstraint` em Jakarta Persistence](https://jakarta.ee/specifications/persistence/3.2/apidocs/jakarta.persistence/jakarta/persistence/uniqueconstraint) e [restrições do PostgreSQL](https://www.postgresql.org/docs/current/ddl-constraints.html).
 
@@ -169,15 +169,13 @@ O serviço de persistência recebe inscrições com pessoa e endereço novos, co
 
 ### Preparar o PostgreSQL
 
-Crie o banco e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica V1 a V5 em um schema vazio; em bancos com histórico, aplica as versões pendentes. A V2 separa `person` de `register` e transfere as deficiências para `person_disabilities`. A V3 cria `course`, `course_class` e `presence`. A V4 substitui o texto `course_of_interest` pela chave estrangeira obrigatória `course_id`, mantendo a unicidade de pessoa e curso. A V5 vincula presença à aula. O Hibernate valida a estrutura (`ddl-auto=validate`); não use `create` ou `create-drop` no banco de trabalho.
+Crie um banco vazio e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica somente `src/main/resources/db/migration/V1__create_initial_schema.sql`, criando endereço, pessoa, deficiências, curso, inscrição, aula e presença com IDs automáticos, chaves estrangeiras, índices e restrições. O Hibernate valida a estrutura (`ddl-auto=validate`).
 
-**Inscrições anteriores à V4:** cada texto antigo deve corresponder exatamente ao nome de um único curso já cadastrado. A migração Java `src/main/java/db/migration/V4__link_register_to_course.java` verifica todas as correspondências antes de alterar a tabela. Se não houver curso correspondente, se a grafia for diferente ou se houver nomes duplicados, a migração para com erro. Revise os vínculos e o catálogo no schema V3 antes de tentar novamente; nenhum curso é criado automaticamente e não é escolhido um ID arbitrário. Inscrições, datas, pessoas e endereços existentes são preservados. As migrações V1 a V3 permanecem inalteradas.
+O histórico anterior foi consolidado durante o desenvolvimento, quando seus dados eram descartáveis. A nova V1 não converte bancos com as versões antigas: esses bancos precisam ser recriados de forma explícita. Não use `repair` ou `baseline-on-migrate` para tratar as estruturas como equivalentes. A aplicação não apaga dados automaticamente; `clean-disabled=true` permanece habilitado.
 
 A configuração compartilhada fica em `src/main/resources/application.yaml`; as credenciais continuam no `.properties` local. Todos os enums são persistidos pelo nome. Inscrição, pessoa e endereço têm IDs automáticos. O endereço é gravado por cascata com a pessoa, e o serviço associa a pessoa persistida à inscrição na mesma transação.
 
-**Presenças anteriores à V5:** `V5__link_presence_to_course_class` verifica se cada presença possui exatamente uma aula correspondente por curso/data e recusa presenças duplicadas da mesma pessoa/aula. Se houver ausência de aula, data nula ou correspondência ambígua, interrompe antes de alterar colunas/dados. Revise esses registros no schema V4; não são criadas aulas nem apagadas presenças automaticamente. Com dados válidos, preenche `course_class_id`, aplica `NOT NULL`, FK e `UNIQUE(person_id, course_class_id)`, substitui o índice de data/curso por aula/curso e remove a antiga coluna `date`. IDs, pessoas, cursos e status são preservados; o dia passa a ser obtido da aula. V1–V4 não foram reescritas.
-
-**Banco com tabelas antigas:** esta primeira migração cria a estrutura inicial; não converte automaticamente tabelas anteriores, IDs manuais ou enums numéricos. O Flyway recusa um schema não vazio sem histórico de migração. Para esse caso, é necessário preparar uma migração específica para a estrutura e os dados existentes. Não habilite `baseline-on-migrate` apenas para contornar esse erro.
+Novas alterações que precisem preservar dados devem evoluir com V2, V3 e seguintes, sem modificar essa V1 depois de aplicada.
 
 Para importar usando outro componente Spring, injete `RegisterImportService`:
 
@@ -223,7 +221,7 @@ Exemplos de enums: `Feminino`, `FEMALE` ou `1`; `Ensino Médio Completo`, `HIGH_
 
 As deficiências são um `Set<Disabilities>`, sem duplicatas. Exemplos de célula: `Auditiva, Visual`, `Intelectual; Física/Motora` ou `1, 4`. `Nenhuma` e `Sem Declaração` devem aparecer isoladamente. A opção `Múltiplas` foi removida: informe as deficiências específicas. Um item desconhecido invalida a linha inteira, sem descartar silenciosamente parte da resposta.
 
-As deficiências pertencem à pessoa. O mapeamento JPA usa `person_disabilities`, com `person_id` e `disability`, guardando o nome de cada enum. A combinação das duas colunas é única. A V2 transfere a coleção da antiga tabela `register_disabilities` para a pessoa correspondente. O uso de `@ElementCollection` com `@Enumerated(EnumType.STRING)` segue a [documentação de Jakarta Persistence](https://jakarta.ee/specifications/platform/9.1/apidocs/jakarta/persistence/enumerated.html).
+As deficiências pertencem à pessoa. O mapeamento JPA usa `person_disabilities`, com `person_id` e `disability`, guardando o nome de cada enum. A combinação das duas colunas é única e a V1 já cria essa estrutura. O uso de `@ElementCollection` com `@Enumerated(EnumType.STRING)` segue a [documentação de Jakarta Persistence](https://jakarta.ee/specifications/platform/9.1/apidocs/jakarta/persistence/enumerated.html).
 
 Formate a coluna CPF como texto no Sheets para preservar zeros à esquerda. A coleta valida o formato e remove a máscara; não verifica os dígitos verificadores. O número do endereço segue o `int` do modelo atual, portanto `s/n` e `12A` geram erro. A data/hora é convertida para `LocalDate`, descartando o horário.
 
@@ -298,13 +296,13 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 
 Os testes usam dados fictícios e não acessam o Google nem o PostgreSQL configurado no arquivo local. O perfil `test` usa H2 em memória e executa as mesmas migrações Flyway da aplicação, com validação do schema pelo Hibernate.
 
-Validação de 01/10/2026: **216 testes aprovados em H2 e novamente em PostgreSQL 18 isolado**, sem falhas, erros ou ignorados. Foram acrescentados 42 casos de inscrição, regras diárias no serviço de aulas e concorrência das restrições de inscrição/presença. Logs: `target/missing-tests-final.log` e `target/missing-tests-postgres.log`. A execução PostgreSQL inclui as migrações V1–V5 e não usa o banco de trabalho.
+Validação da V1 consolidada em 01/10/2026: **216 testes aprovados em H2 e PostgreSQL 18 isolado**, sem falhas, erros ou ignorados. Logs: `target/initial-schema-h2-tests.log` e `target/initial-schema-postgres-tests.log`. Os 13 casos de conversão de versões antigas foram substituídos por 12 casos da estrutura inicial e um caso adicional de concorrência de aulas.
 
-Validação de 30/09/2026 às 15:41: `test` terminou com **144 testes aprovados**, sem falhas, erros ou ignorados (`target/presence-fix-final-tests.log`). `PresenceClassMigrationTests` cobre V4 → V5: preservação dos registros, correspondência exata de aula, restrições de unicidade/FK/obrigatoriedade e recusa de dados antigos inválidos antes de alterar colunas. Os testes de serviço e HTTP cobrem criação por pessoa/aula, atualização isolada entre aulas no mesmo dia e consulta por aula/curso. Também há cobertura de pessoa/aula inexistentes e duplicidade no serviço e no banco. Essa execução foi em H2; não é evidência de uma execução em PostgreSQL.
+`InitialSchemaMigrationTests` verifica a criação em schema vazio, uma única V1 aplicada, reexecução sem alterações, tabelas atuais sem colunas legadas, geração de IDs e restrições de aulas/presenças. A suíte de persistência continua verificando os vínculos, unicidade de CPF/inscrição/presença e rollback.
 
 `PersonDisabilitiesPersistenceTests` valida a gravação, leitura e atualização das deficiências da pessoa. Execute-o com `.\mvnw.cmd test "-Dtest=PersonDisabilitiesPersistenceTests"`.
 
-`RegisterPersistenceTests` cobre gravação completa, IDs automáticos, CPF com zero inicial, inscrições diferentes para a mesma pessoa, reimportação, divergências, rollback, unicidade de CPF/inscrição e ausência de CPF nos logs de falha SQL. Também verifica cursos inexistentes, cursos de mesmo nome, renomeação e a chave estrangeira obrigatória. `PersonMigrationTests` verifica a evolução V1 → V2, incluindo vínculos, deficiências e geração de novos IDs. `RegisterCourseMigrationTests` verifica a evolução V3 → V4 com inscrições existentes, preservação de dados, novas restrições e recusa de cursos ausentes ou ambíguos antes de alterar a tabela. `RegisterSheetMapperTests` valida os IDs e aliases da planilha. `RegisterImportServiceTests` cobre a ligação entre coleta e persistência.
+`RegisterPersistenceTests` cobre gravação completa, IDs automáticos, CPF com zero inicial, inscrições diferentes para a mesma pessoa, reimportação, divergências, rollback, unicidade de CPF/inscrição e ausência de CPF nos logs de falha SQL. Também verifica cursos inexistentes, cursos de mesmo nome, renomeação e a chave estrangeira obrigatória. `RegisterSheetMapperTests` valida os IDs e aliases da planilha. `RegisterImportServiceTests` cobre a ligação entre coleta e persistência.
 
 Em `src/test/java/com/example/qualificamaisanalitic/services`, os testes de pessoa, curso, turma, presença e inscrição verificam cadastro, atualização parcial, consultas, exclusão e registros inexistentes. Os testes unitários usam repositórios simulados e os mappers reais gerados pelo MapStruct. `ServicesPersistenceTests` exercita os serviços com H2/Flyway, incluindo unicidade de inscrição, presenças em cursos diferentes no mesmo dia e atualização de deficiências sem uma transação aberta pelo chamador. Também verifica que uma atualização inválida não altera os dados salvos. `CoursePresencePersistenceTests` verifica os relacionamentos e a leitura das novas tabelas.
 
@@ -318,7 +316,7 @@ Em `src/test/java/com/example/qualificamaisanalitic/services`, os testes de pess
 
 `RegisterServiceTests` acrescenta CPF normalizado nas quatro operações, rejeição de comprimento inválido antes de acessar repositórios, sobreposição parcial/total, intervalos iguais ou encostados, dias diferentes, cursos sem aulas e conflito encontrado após outras inscrições/aulas. Cursos sem aulas continuam permitidos pela implementação; horários nulos, importação com conflito e reagendamento precisam de regras adicionais.
 
-`ConcurrentPersistenceTests` usa duas transações independentes sincronizadas antes da gravação para verificar que o banco aceita apenas uma inscrição pessoa/curso ou presença pessoa/aula duplicada. Essa cobertura não garante concorrência de horários nem a unicidade diária de aulas ainda ausente no schema.
+`ConcurrentPersistenceTests` usa duas transações independentes sincronizadas antes da gravação para verificar que o banco aceita apenas uma inscrição pessoa/curso, presença pessoa/aula ou aula curso/dia duplicada. Essa cobertura não garante concorrência de horários entre cursos diferentes.
 
 Também é possível executar a suíte em um **banco PostgreSQL exclusivo para testes**, já criado e inicialmente vazio. Os testes apagam os registros de suas tabelas entre casos; nunca indique um banco de trabalho:
 

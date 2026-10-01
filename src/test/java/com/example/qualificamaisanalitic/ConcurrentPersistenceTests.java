@@ -36,7 +36,7 @@ class ConcurrentPersistenceTests {
     @Autowired private JdbcTemplate jdbc;
 
     @ParameterizedTest
-    @ValueSource(strings = {"register", "presence"})
+    @ValueSource(strings = {"register", "presence", "course_class"})
     void databaseAllowsOnlyOneConcurrentInsertForTheSamePersonAndTarget(String table) throws Exception {
         var day = LocalDate.of(2026, 10, 1);
         var person = PersonTestData.person("10987654321");
@@ -45,7 +45,7 @@ class ConcurrentPersistenceTests {
         transactions.executeWithoutResult(status -> {
             people.saveAndFlush(person);
             courses.saveAndFlush(course);
-            classes.saveAndFlush(courseClass);
+            if (!table.equals("course_class")) classes.saveAndFlush(courseClass);
         });
         var readyToWrite = new CyclicBarrier(2);
         try (var executor = Executors.newFixedThreadPool(2)) {
@@ -53,13 +53,17 @@ class ConcurrentPersistenceTests {
                 try {
                     transactions.executeWithoutResult(status -> {
                         // As duas transações confirmam ausência antes de tentar gravar.
+                        String filter = table.equals("course_class") ? "course_id" : "person_id";
+                        Long targetId = table.equals("course_class") ? course.getId() : person.getId();
                         assertEquals(0, jdbc.queryForObject("select count(*) from " + table
-                                + " where person_id = ?", Integer.class, person.getId()));
+                                + " where " + filter + " = ?", Integer.class, targetId));
                         awaitBothWriters(readyToWrite);
                         if (table.equals("register")) {
                             registers.saveAndFlush(new Register(person, course, day));
-                        } else {
+                        } else if (table.equals("presence")) {
                             presences.saveAndFlush(new Presence(person, courseClass, course, PresenceStatus.PRESENT));
+                        } else {
+                            classes.saveAndFlush(new CourseClass(day, "Manhã", day.atTime(8, 0), day.atTime(10, 0), course));
                         }
                     });
                     return true;
@@ -72,13 +76,15 @@ class ConcurrentPersistenceTests {
             boolean firstSaved = first.get(20, TimeUnit.SECONDS);
             boolean secondSaved = second.get(20, TimeUnit.SECONDS);
             assertNotEquals(firstSaved, secondSaved, "Exatamente uma transação deve confirmar a gravação");
+            String filter = table.equals("course_class") ? "course_id" : "person_id";
+            Long targetId = table.equals("course_class") ? course.getId() : person.getId();
             assertEquals(1, jdbc.queryForObject("select count(*) from " + table
-                    + " where person_id = ?", Integer.class, person.getId()));
+                    + " where " + filter + " = ?", Integer.class, targetId));
         } finally {
             transactions.executeWithoutResult(status -> {
                 jdbc.update("delete from presence where person_id = ?", person.getId());
                 jdbc.update("delete from register where person_id = ?", person.getId());
-                jdbc.update("delete from course_class where id = ?", courseClass.getId());
+                jdbc.update("delete from course_class where course_id = ?", course.getId());
                 jdbc.update("delete from course where id = ?", course.getId());
                 jdbc.update("delete from person_disabilities where person_id = ?", person.getId());
                 jdbc.update("delete from person where id = ?", person.getId());

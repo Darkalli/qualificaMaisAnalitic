@@ -28,9 +28,7 @@ Backend para gerenciar pessoas, cursos, turmas, inscrições e presenças. Ofere
 
 A API fica em `http://localhost:8080` por padrão. Na IDE, execute `com.QualificaMaisAnaliticApplication` com o processamento de anotações habilitado para Lombok e MapStruct.
 
-O Flyway aplica as migrações e o Hibernate valida as tabelas. **Em bancos com inscrições anteriores à V4**, cada nome de curso antigo precisa corresponder exatamente a um único curso cadastrado; caso contrário, a migração é interrompida. Veja os [detalhes de migração](docs/guia-tecnico.md#preparar-o-postgresql).
-
-A V5 vincula presenças antigas às aulas por curso/data. Ela interrompe se houver vínculo ausente, ambíguo ou presença duplicada, para revisão dos dados.
+O Flyway cria o schema completo com `V1__create_initial_schema.sql` e o Hibernate valida as tabelas. A V1 consolidada exige um banco vazio; não atualiza instalações com as migrações antigas. Veja os [detalhes de migração](docs/guia-tecnico.md#preparar-o-postgresql).
 
 ## API
 
@@ -90,6 +88,6 @@ Para executar apenas os testes da API:
 
 O projeto está em desenvolvimento. Ainda faltam autenticação, tratamento padronizado de erros da API, validação completa das entradas, regras de conflito de horários e unicidade de presenças. As respostas HTTP usam entidades JPA diretamente.
 
-A criação e a edição de aulas consultam duplicidade por curso/dia. A edição ainda precisa tratar a própria aula e campos omitidos; falta garantir a regra por migração no banco. Veja os [limites da validação de aulas](docs/guia-tecnico.md#uma-aula-por-curso-e-dia).
+A criação e a edição de aulas consultam duplicidade por curso/dia, considerando a própria aula e campos omitidos. A V1 também garante curso/dia obrigatórios e únicos no banco, inclusive em gravações simultâneas. Veja os [detalhes da regra de aulas](docs/guia-tecnico.md#uma-aula-por-curso-e-dia).
 
 Veja o [guia técnico](docs/guia-tecnico.md) para estrutura do código, exemplos de requisições, configuração e cobertura dos testes.
