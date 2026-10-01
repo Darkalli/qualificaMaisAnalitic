@@ -54,7 +54,7 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | GET | `/api/register` | **Corpo JSON** com `personCpf` e `courseOfInterestId`. | 200 + inscrição |
 | DELETE | `/api/register` | Mesmo corpo da busca específica. | 204 sem corpo |
 
-As consultas de presenças por curso/data e de inscrição por CPF/curso usam `@RequestBody` em GET. Os parâmetros na URL não substituem o corpo obrigatório. A exclusão de inscrição também exige corpo JSON. A API declara 22 endpoints; as rotas de inscrição ainda não têm testes HTTP específicos.
+As consultas de presenças por aula/curso e de inscrição por CPF/curso usam `@RequestBody` em GET. Os parâmetros na URL não substituem o corpo obrigatório. A exclusão de inscrição também exige corpo JSON. A API declara 22 endpoints, incluindo as quatro rotas de inscrição cobertas por testes MockMvc.
 
 ### Exemplos de entrada
 
@@ -134,12 +134,12 @@ No commit `d8fede8`, a criação de `CourseClass` passou a consultar `existsByCo
 
 A implementação ainda é parcial:
 
-- Nas alterações locais posteriores ao commit, a edição também consulta duplicidade, mas usa diretamente os campos do DTO antes de carregar a aula. Pode rejeitar a própria aula quando curso/dia são reenviados e deixar passar conflito num PATCH que omite um desses campos. Deve carregar a aula, combinar os valores enviados com os salvos e consultar excluindo o próprio ID.
+- A edição carrega a aula, combina os valores enviados no PATCH com os salvos e consulta duplicidade excluindo o próprio ID. Reenviar curso/dia da própria aula é permitido; alterar somente curso ou dia também verifica a combinação final antes de modificar campos.
 - A anotação `@UniqueConstraint` já foi corrigida localmente para as colunas `course_id` e `class_day`. Isso alinha o mapeamento, mas ainda falta a restrição no banco gerenciado por Flyway.
 - As migrações existentes não criam essa unicidade. Com `ddl-auto=validate`, a anotação não altera a tabela; a consulta prévia não impede duas inserções simultâneas. A V5 trata o vínculo e a unicidade de presença, não a unicidade diária das aulas.
 - `course_id` e `class_day` continuam aceitando nulos no schema. A obrigatoriedade desses dados e a consistência entre dia e horários ainda precisam ser garantidas.
 
-A revisão inicial da regra diária teve 132 testes aprovados em H2 em 30/09 às 14:20 (`target/one-class-per-day-final-tests.log`). A execução posterior às 15:41 teve 144 testes aprovados, incluindo o vínculo de presença à aula e a V5 (`target/presence-fix-final-tests.log`). A cobertura de presença não comprova a unicidade diária de aulas: testes específicos de aulas duplicadas, edição conflitante e concorrência continuam pendentes.
+`CourseClassServiceTests` e `CourseClassDailyRuleTests` cobrem criação duplicada, cursos/dias diferentes, atualização da própria aula e PATCH parcial conflitante ou permitido. A garantia diária no banco, sua migração e a proteção contra criação concorrente de aulas continuam pendentes.
 
 Referências: [`UniqueConstraint` em Jakarta Persistence](https://jakarta.ee/specifications/persistence/3.2/apidocs/jakarta.persistence/jakarta/persistence/uniqueconstraint) e [restrições do PostgreSQL](https://www.postgresql.org/docs/current/ddl-constraints.html).
 
@@ -298,6 +298,8 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 
 Os testes usam dados fictícios e não acessam o Google nem o PostgreSQL configurado no arquivo local. O perfil `test` usa H2 em memória e executa as mesmas migrações Flyway da aplicação, com validação do schema pelo Hibernate.
 
+Validação de 01/10/2026: **216 testes aprovados em H2 e novamente em PostgreSQL 18 isolado**, sem falhas, erros ou ignorados. Foram acrescentados 42 casos de inscrição, regras diárias no serviço de aulas e concorrência das restrições de inscrição/presença. Logs: `target/missing-tests-final.log` e `target/missing-tests-postgres.log`. A execução PostgreSQL inclui as migrações V1–V5 e não usa o banco de trabalho.
+
 Validação de 30/09/2026 às 15:41: `test` terminou com **144 testes aprovados**, sem falhas, erros ou ignorados (`target/presence-fix-final-tests.log`). `PresenceClassMigrationTests` cobre V4 → V5: preservação dos registros, correspondência exata de aula, restrições de unicidade/FK/obrigatoriedade e recusa de dados antigos inválidos antes de alterar colunas. Os testes de serviço e HTTP cobrem criação por pessoa/aula, atualização isolada entre aulas no mesmo dia e consulta por aula/curso. Também há cobertura de pessoa/aula inexistentes e duplicidade no serviço e no banco. Essa execução foi em H2; não é evidência de uma execução em PostgreSQL.
 
 `PersonDisabilitiesPersistenceTests` valida a gravação, leitura e atualização das deficiências da pessoa. Execute-o com `.\mvnw.cmd test "-Dtest=PersonDisabilitiesPersistenceTests"`.
@@ -306,13 +308,17 @@ Validação de 30/09/2026 às 15:41: `test` terminou com **144 testes aprovados*
 
 Em `src/test/java/com/example/qualificamaisanalitic/services`, os testes de pessoa, curso, turma, presença e inscrição verificam cadastro, atualização parcial, consultas, exclusão e registros inexistentes. Os testes unitários usam repositórios simulados e os mappers reais gerados pelo MapStruct. `ServicesPersistenceTests` exercita os serviços com H2/Flyway, incluindo unicidade de inscrição, presenças em cursos diferentes no mesmo dia e atualização de deficiências sem uma transação aberta pelo chamador. Também verifica que uma atualização inválida não altera os dados salvos. `CoursePresencePersistenceTests` verifica os relacionamentos e a leitura das novas tabelas.
 
-`controllers/ApiControllerTests` exercita os 18 endpoints implementados com MockMvc, contexto Spring, serviços reais e banco de testes, sem abrir uma porta HTTP. Cobre os ciclos de cadastro/consulta/atualização/exclusão, ordenação de pessoas, normalização, preservação de campos omitidos, filtros de presença por pessoa/curso/data, JSON sem recursão entre curso e turma, status 201/200/204 e erros 400/405. Os testes não usam uma transação externa para esconder falhas de persistência entre requisições. O scheduler fica desabilitado. Execute apenas esses cenários com:
+`controllers/ApiControllerTests` exercita os 22 endpoints implementados com MockMvc, contexto Spring, serviços reais e banco de testes, sem abrir uma porta HTTP. Seus 18 casos cobrem ciclos de cadastro/consulta/atualização/exclusão, ordenação de pessoas, normalização, campos omitidos, filtros de presença por pessoa/aula/curso, JSON sem recursão, status 201/200/204 e erros 400/405. Inscrição também cobre reutilização da pessoa, CPF com máscara, exclusão isolada, duplicidade, referências ausentes e horários sobrepostos/encostados. Erros de negócio ainda são exceções propagadas pelo MockMvc, sem pressupor contratos 404/409. Os testes não usam uma transação externa para esconder falhas de persistência entre requisições. O scheduler fica desabilitado. Execute apenas esses cenários com:
 
 ```powershell
 .\mvnw.cmd test "-Dtest=ApiControllerTests"
 ```
 
 `CpfUtilsTests` e `CellphoneUtilsTests` cobrem formatação e normalização, CPF com zero inicial, telefone fixo/celular, prefixo `+55`, DDD 55, contato opcional ausente e quantidades inválidas de dígitos. Esses testes não comprovam validação dos dígitos verificadores de CPF nem existência dos números de telefone.
+
+`RegisterServiceTests` acrescenta CPF normalizado nas quatro operações, rejeição de comprimento inválido antes de acessar repositórios, sobreposição parcial/total, intervalos iguais ou encostados, dias diferentes, cursos sem aulas e conflito encontrado após outras inscrições/aulas. Cursos sem aulas continuam permitidos pela implementação; horários nulos, importação com conflito e reagendamento precisam de regras adicionais.
+
+`ConcurrentPersistenceTests` usa duas transações independentes sincronizadas antes da gravação para verificar que o banco aceita apenas uma inscrição pessoa/curso ou presença pessoa/aula duplicada. Essa cobertura não garante concorrência de horários nem a unicidade diária de aulas ainda ausente no schema.
 
 Também é possível executar a suíte em um **banco PostgreSQL exclusivo para testes**, já criado e inicialmente vazio. Os testes apagam os registros de suas tabelas entre casos; nunca indique um banco de trabalho:
 

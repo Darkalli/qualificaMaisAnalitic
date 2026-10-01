@@ -10,6 +10,7 @@ import com.repositories.CourseRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -33,13 +34,13 @@ public class CourseClassService {
     }
 
     public CourseClass updateCourseClass(UpdateCourseClassDto dto){
-        if (dto.day() != null && dto.course() == null) {
-            throw new IllegalArgumentException("Para alterar o dia, as informações do curso são obrigatórias.");
-        }else if (courseClassRepository.existsByCourseAndDay(dto.course(), dto.day())) {
-            throw new IllegalArgumentException("O curso já possui uma aula registrada para este dia.");
-        }
         CourseClass courseClass = courseClassRepository.findById(dto.classId())
                 .orElseThrow(() -> new EntityNotFoundException("Turma não encontrada com o ID: " + dto.classId()));
+        Course course = dto.course() != null ? dto.course() : courseClass.getCourse();
+        LocalDate day = dto.day() != null ? dto.day() : courseClass.getDay();
+        if (courseClassRepository.existsByCourseAndDayAndIdNot(course, day, dto.classId())) {
+            throw new IllegalArgumentException("O curso já possui uma aula registrada para este dia.");
+        }
         mapper.updateCourseClassfromDto(dto,courseClass);
         return courseClassRepository.save(courseClass);
     }

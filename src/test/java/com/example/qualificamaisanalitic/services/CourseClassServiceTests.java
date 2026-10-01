@@ -125,11 +125,16 @@ class CourseClassServiceTests {
     void refusesMovingClassToAnOccupiedCourseAndDayWithoutSaving() {
         var course = new Course();
         course.setId(3L);
-        when(classes.existsByCourseAndDay(course, DAY)).thenReturn(true);
+        var saved = new CourseClass(DAY.minusDays(1), "Manhã", DAY.atTime(8, 0), DAY.atTime(10, 0), course);
+        saved.setId(4L);
+        when(classes.findById(4L)).thenReturn(Optional.of(saved));
+        when(classes.existsByCourseAndDayAndIdNot(course, DAY, 4L)).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> service.updateCourseClass(
                 new UpdateCourseClassDto(4L, DAY, "Tarde", DAY.atTime(14, 0), DAY.atTime(16, 0), course)));
 
         verify(classes, never()).save(any());
+        assertEquals(DAY.minusDays(1), saved.getDay());
+        assertEquals("Manhã", saved.getSession());
     }
 }

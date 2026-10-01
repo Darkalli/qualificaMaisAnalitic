@@ -13,4 +13,5 @@ public interface CourseClassRepository extends JpaRepository<CourseClass, Long> 
     Optional<CourseClass> findById(Long id);
 
     boolean existsByCourseAndDay(Course course, LocalDate day);
+    boolean existsByCourseAndDayAndIdNot(Course course, LocalDate day, Long id);
 }

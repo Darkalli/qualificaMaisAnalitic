@@ -105,9 +105,7 @@ public class RegisterSheetMapper {
         person.setFullName(cell(row, columns, Column.FULL_NAME));
         person.setSocialName(cell(row, columns, Column.SOCIAL_NAME));
         String cpf = cell(row, columns, Column.CPF);
-        cpf = formatCpf(cpf);
-            cpf = cleanCpf(cpf);
-            person.setCpf(cpf);
+        person.setCpf(cleanCpf(formatCpf(cpf)));
 
         person.setEmail(cell(row, columns, Column.EMAIL));
         person.setPersonalPhone(phone(cell(row, columns, Column.PERSONAL_PHONE), Column.PERSONAL_PHONE));
