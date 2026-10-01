@@ -1,6 +1,8 @@
 package com.example.qualificamaisanalitic.controllers;
 
 import com.jayway.jsonpath.JsonPath;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -9,13 +11,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -150,12 +153,12 @@ class ApiControllerTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/api/person", "/api/course", "/api/courseClass", "/api/presence"})
+    @ValueSource(strings = {"/api/person", "/api/course", "/api/courseClass", "/api/presence", "/api/register"})
     void rejectsMalformedJsonAndMissingBodyWithoutSaving(String route) throws Exception {
         mvc.perform(post(route).contentType(APPLICATION_JSON).content("{invalid"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post(route).contentType(APPLICATION_JSON)).andExpect(status().isBadRequest());
-        for (String table : new String[]{"person", "address", "course", "course_class", "presence"}) {
+        for (String table : new String[]{"person", "address", "course", "course_class", "presence", "register"}) {
             assertEquals(0, jdbc.queryForObject("select count(*) from " + table, Integer.class));
         }
     }

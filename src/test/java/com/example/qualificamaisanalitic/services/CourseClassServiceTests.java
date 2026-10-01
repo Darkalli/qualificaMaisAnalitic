@@ -108,4 +108,28 @@ class CourseClassServiceTests {
         assertThrows(EntityNotFoundException.class, () -> service.allClassesByCourseId(3L));
         verifyNoInteractions(classes);
     }
+
+    @Test
+    void refusesSecondClassOnSameCourseAndDayEvenWithDifferentSessionAndTimes() {
+        var course = new Course();
+        course.setId(3L);
+        when(classes.existsByCourseAndDay(course, DAY)).thenReturn(true);
+
+        assertThrows(IllegalArgumentException.class, () -> service.addCourseClass(
+                new AddCourseClassDto(DAY, "Tarde", DAY.atTime(14, 0), DAY.atTime(16, 0), course)));
+
+        verify(classes, never()).save(any());
+    }
+
+    @Test
+    void refusesMovingClassToAnOccupiedCourseAndDayWithoutSaving() {
+        var course = new Course();
+        course.setId(3L);
+        when(classes.existsByCourseAndDay(course, DAY)).thenReturn(true);
+
+        assertThrows(IllegalArgumentException.class, () -> service.updateCourseClass(
+                new UpdateCourseClassDto(4L, DAY, "Tarde", DAY.atTime(14, 0), DAY.atTime(16, 0), course)));
+
+        verify(classes, never()).save(any());
+    }
 }

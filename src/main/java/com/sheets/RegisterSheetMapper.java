@@ -106,12 +106,9 @@ public class RegisterSheetMapper {
         person.setSocialName(cell(row, columns, Column.SOCIAL_NAME));
         String cpf = cell(row, columns, Column.CPF);
         cpf = formatCpf(cpf);
-        if (cpf == null || cpf.length() != 11) {
-            throw new IllegalArgumentException("CPF deve conter 11 dígitos.");
-        }else {
             cpf = cleanCpf(cpf);
             person.setCpf(cpf);
-        }
+
         person.setEmail(cell(row, columns, Column.EMAIL));
         person.setPersonalPhone(phone(cell(row, columns, Column.PERSONAL_PHONE), Column.PERSONAL_PHONE));
         person.setPersonalPhoneHasWhatsapp(whatsapp(cell(row, columns, Column.PERSONAL_PHONE_HAS_WHATSAPP)));
@@ -200,10 +197,17 @@ public class RegisterSheetMapper {
     }
 
     private String phone(String value, Column column) {
-        if (value == null) {
+        if (value == null || value.isBlank()) {
+            if (column.required) {
+                throw new IllegalArgumentException(column.label + ": preenchimento obrigatório.");
+            }
             return null;
         }
-        return cleanPhone(value);
+        try {
+            return cleanPhone(value);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(column.label + ": " + e.getMessage());
+        }
     }
 
     private Boolean whatsapp(String value) {

@@ -3,6 +3,8 @@ package com.services;
 import com.dtos.registerDtos.AddRegisterDto;
 import com.dtos.registerDtos.SearchRegisterDto;
 import com.entities.Course;
+import com.entities.CourseClass;
+import com.entities.Person;
 import com.entities.Register;
 import com.repositories.CourseRepository;
 import com.repositories.PersonRepository;
@@ -11,7 +13,10 @@ import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+
+import static com.utils.CpfUtils.*;
 
 @Service
 public class RegisterService {
@@ -27,26 +32,71 @@ public class RegisterService {
     }
 
     @Transactional
-    public Register addRegister (AddRegisterDto registerDto){
-        Course course = courseRepository.findById(registerDto.courseOfInterestId())
-                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o Id: " + registerDto.courseOfInterestId()));
-        return registerRepository.save(new Register(personRepository.findByCpf(registerDto.personCpf())
-                .orElseThrow(() -> new EntityNotFoundException("Aluno(a) não encontrado(a) com o cpf: " + registerDto.personCpf())),
-                course, registerDto.registerDate()));
+    public Register addRegister (AddRegisterDto dto){
+        String cpf = formatCpf(dto.personCpf());
+        cpf = cleanCpf(cpf);
+        Course course = courseRepository.findById(dto.courseOfInterestId())
+                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o Id: " + dto.courseOfInterestId()));
+        Person person = personRepository.findByCpf(cpf)
+                .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada com o cpf: " + dto.personCpf()));
+        Register newRegister = new Register(person, course, dto.registerDate());
+        if (hasScheduleConflict(newRegister)) {
+            throw new IllegalArgumentException("Não é possivel se inscrever em cursos com mesmos horarios");
+        }else {
+            return registerRepository.save(newRegister);
+        }
     }
 
     @Transactional
-    public void deleteRegister (SearchRegisterDto delete){
-        registerRepository.delete(registerRepository.findByPerson_CpfAndCourseOfInterest_Id(delete.personCpf(), delete.courseOfInterestId())
+    public void deleteRegister (SearchRegisterDto dto){
+        String cpf = formatCpf(dto.personCpf());
+        cpf = cleanCpf(cpf);
+        registerRepository.delete(registerRepository.findByPerson_CpfAndCourseOfInterest_Id(cpf, dto.courseOfInterestId())
                 .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados.")));
     }
 
-    public List<Register> getAllRegisterByCpf(String cpf){
+    public List<Register> getAllRegisterByCpf(String cpfIn){
+        String cpf = formatCpf(cpfIn);
+        cpf = cleanCpf(cpf);
         return registerRepository.findByPerson_Cpf(cpf);
     }
 
-    public Register getByPersonCpfAndCourseOfInterest (SearchRegisterDto registerDto){
-        return registerRepository.findByPerson_CpfAndCourseOfInterest_Id(registerDto.personCpf(), registerDto.courseOfInterestId())
+    public Register getByPersonCpfAndCourseOfInterest (SearchRegisterDto dto){
+        String cpf = formatCpf(dto.personCpf());
+        cpf = cleanCpf(cpf);
+        return registerRepository.findByPerson_CpfAndCourseOfInterest_Id(cpf, dto.courseOfInterestId())
                 .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados."));
+    }
+
+    private boolean hasScheduleConflict(Register newRegister) {
+        Course newCourse = newRegister.getCourseOfInterest();
+
+        List<Register> registers =
+                registerRepository.findByPerson_Cpf(
+                        newRegister.getPerson().getCpf()
+                );
+
+        for (Register register : registers) {
+            if (newRegister.getId() != null && newRegister.getId().equals(register.getId())) {
+                continue;
+            }
+            Course course = register.getCourseOfInterest();
+            for (CourseClass courseClass : course.getCourseClass()) {
+                for (CourseClass newCourseClass : newCourse.getCourseClass()) {
+                    boolean sameDay =
+                            newCourseClass.getDay().equals(courseClass.getDay());
+                    boolean conflict =
+                            sameDay
+                                    && newCourseClass.getStart()
+                                    .isBefore(courseClass.getFinish())
+                                    && newCourseClass.getFinish()
+                                    .isAfter(courseClass.getStart());
+                    if (conflict) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }
