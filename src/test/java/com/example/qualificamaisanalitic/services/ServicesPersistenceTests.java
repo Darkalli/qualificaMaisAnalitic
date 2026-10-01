@@ -89,7 +89,7 @@ class ServicesPersistenceTests {
             Long personId = people.getByCpf(cpf).getId();
             people.updatePerson(new UpdatePersonDto("876.543.210-09", "Nome atualizado", "novo@example.com",
                     "+55 (21) 98888-7777", "(21) 2222-3333", null, null, null, null,
-                    Set.of(Disabilities.MOTOR)));
+                    Set.of("Física/Motora")));
             transactions.executeWithoutResult(status -> {
                 var saved = entityManager.find(Person.class, personId);
                 assertEquals("Nome atualizado", saved.getSocialName());

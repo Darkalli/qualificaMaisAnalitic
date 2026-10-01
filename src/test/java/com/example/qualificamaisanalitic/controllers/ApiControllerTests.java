@@ -52,7 +52,7 @@ class ApiControllerTests {
         mvc.perform(get("/api/person/person/{cpf}", "012.345.678-90"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));
         mvc.perform(patch("/api/person").contentType(APPLICATION_JSON).content("""
-                {"Cpf":"01234567890","email":"novo@example.com","disabilities":["VISUAL"]}
+                {"Cpf":"01234567890","email":"novo@example.com","disabilities":["Visual","4"]}
                 """))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.email").value("novo@example.com"))
                 .andExpect(jsonPath("$.personalPhone").value("11999990000"))
@@ -176,7 +176,7 @@ class ApiControllerTests {
                  "personalPhone":"(11) 99999-0000","personalPhoneHasWhatsapp":false,
                  "address":{"street":"Rua Exemplo","number":42,"neighborhood":"Centro"},
                  "gender":"FEMALE","education":"HIGH_SCHOOL_COMPLETE","workState":"ONLY_STUDYING",
-                 "disabilities":["HEARING"]}
+                 "disabilities":["Auditiva","HEARING","1"]}
                 """.formatted(name, cpf))).andExpect(status().isCreated());
     }
 

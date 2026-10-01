@@ -3,6 +3,7 @@ package com.example.qualificamaisanalitic.services;
 import com.dtos.personDtos.AddPersonDto;
 import com.entities.Person;
 import com.example.qualificamaisanalitic.PersonTestData;
+import java.util.stream.Collectors;
 
 final class ServiceTestData {
     private ServiceTestData() { }
@@ -19,6 +20,6 @@ final class ServiceTestData {
         var person = person();
         return new AddPersonDto(person.getFullName(), person.getSocialName(), cpf, person.getEmail(),
                 phone, false, familyPhone, person.getAddress(), person.getGender(), person.getEducation(),
-                person.getWorkState(), person.getDisabilities());
+                person.getWorkState(), person.getDisabilities().stream().map(Enum::name).collect(Collectors.toSet()));
     }
 }
