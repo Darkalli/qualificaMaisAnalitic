@@ -13,10 +13,10 @@ import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static com.utils.CpfUtils.*;
+import static com.utils.RegisterUtils.*;
 
 @Service
 public class RegisterService {
@@ -40,7 +40,7 @@ public class RegisterService {
         Person person = personRepository.findByCpf(cpf)
                 .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada com o cpf: " + dto.personCpf()));
         Register newRegister = new Register(person, course, dto.registerDate());
-        if (hasScheduleConflict(newRegister)) {
+        if (hasScheduleConflict(registerRepository, newRegister)) {
             throw new IllegalArgumentException("Não é possivel se inscrever em cursos com mesmos horarios");
         }else {
             return registerRepository.save(newRegister);
@@ -66,37 +66,5 @@ public class RegisterService {
         cpf = cleanCpf(cpf);
         return registerRepository.findByPerson_CpfAndCourseOfInterest_Id(cpf, dto.courseOfInterestId())
                 .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados."));
-    }
-
-    private boolean hasScheduleConflict(Register newRegister) {
-        Course newCourse = newRegister.getCourseOfInterest();
-
-        List<Register> registers =
-                registerRepository.findByPerson_Cpf(
-                        newRegister.getPerson().getCpf()
-                );
-
-        for (Register register : registers) {
-            if (newRegister.getId() != null && newRegister.getId().equals(register.getId())) {
-                continue;
-            }
-            Course course = register.getCourseOfInterest();
-            for (CourseClass courseClass : course.getCourseClass()) {
-                for (CourseClass newCourseClass : newCourse.getCourseClass()) {
-                    boolean sameDay =
-                            newCourseClass.getDay().equals(courseClass.getDay());
-                    boolean conflict =
-                            sameDay
-                                    && newCourseClass.getStart()
-                                    .isBefore(courseClass.getFinish())
-                                    && newCourseClass.getFinish()
-                                    .isAfter(courseClass.getStart());
-                    if (conflict) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 }
