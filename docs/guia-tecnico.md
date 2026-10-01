@@ -126,7 +126,7 @@ As respostas usam as entidades JPA diretamente. Um curso inclui `courseClass`; c
 
 JSON malformado, corpo obrigatório ausente e ID de caminho com formato inválido retornam 400; método HTTP não suportado retorna 405. Ainda não há tratamento global que traduza pessoa/curso inexistente, CPF inválido ou conflito no banco em respostas de negócio padronizadas, como 404/409. Também não há validação completa de campos com Bean Validation. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
 
-Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. Compartilhar a checagem de horários com a importação e validar inscrição para registrar presença continuam pendentes; a unicidade pessoa/aula é garantida pela V1.
+Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. A inscrição direta e a importação compartilham a checagem de horários. Validar inscrição para registrar presença continua pendente; a unicidade pessoa/aula é garantida pela V1.
 
 ### Uma aula por curso e dia
 
@@ -145,7 +145,7 @@ Referências: [`UniqueConstraint` em Jakarta Persistence](https://jakarta.ee/spe
 
 ## Persistência atual e reimportação
 
-Existe uma pessoa por CPF normalizado e cada `Register` contém a pessoa, uma referência obrigatória a `Course` e a data de inscrição. Cursos diferentes podem reutilizar a mesma pessoa. A identidade da inscrição é a combinação de pessoa e ID do curso (`person_id`, `course_id`); a data não faz parte dessa chave. Renomear um curso não cria outra inscrição, e cursos com nomes iguais continuam distintos pelos IDs. Ainda não há validação de conflitos de horários. A tabela abaixo descreve o comportamento da importação.
+Existe uma pessoa por CPF normalizado e cada `Register` contém a pessoa, uma referência obrigatória a `Course` e a data de inscrição. Cursos diferentes podem reutilizar a mesma pessoa. A identidade da inscrição é a combinação de pessoa e ID do curso (`person_id`, `course_id`); a data não faz parte dessa chave. Renomear um curso não cria outra inscrição, e cursos com nomes iguais continuam distintos pelos IDs. A inscrição direta e a importação chamam `RegisterUtils.hasScheduleConflict()` para novas inscrições, comparando aulas do mesmo dia. Horários encostados são permitidos. A tabela abaixo descreve o comportamento da importação.
 
 | Situação | Comportamento implementado |
 | --- | --- |
@@ -160,6 +160,7 @@ Existe uma pessoa por CPF normalizado e cada `Register` contém a pessoa, uma re
 | Linha removida da planilha | Não exclui o cadastro do banco. |
 | ID do curso vazio, nome em texto ou número inválido | Descarta a linha e informa o erro de formato no relatório da coleta. |
 | ID válido no formato, mas inexistente no catálogo | Interrompe a persistência e reverte o lote inteiro; corrija o ID antes de reimportar. |
+| Nova inscrição com horário sobreposto para a mesma pessoa | Lança erro e reverte o lote inteiro, inclusive se o conflito for com outra linha do lote. Inscrições já salvas permanecem intactas. |
 
 Após a primeira gravação, o banco prevalece sobre a planilha. Divergências ficam no resultado da importação e no log; ainda não existe tela de resolução nem histórico persistido desses conflitos. As restrições `uk_person_cpf` e `uk_register_person_course` impedem duplicatas de pessoa e de inscrição no modelo atual. A ordem das linhas não é usada como identidade. Uma inscrição nova pode contar tanto em `inserted` quanto em `conflicts` quando os dados pessoais recebidos diferem dos salvos.
 
@@ -296,6 +297,8 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 
 Os testes usam dados fictícios e não acessam o Google nem o PostgreSQL configurado no arquivo local. O perfil `test` usa H2 em memória e executa as mesmas migrações Flyway da aplicação, com validação do schema pelo Hibernate.
 
+Validação da checagem de horários na importação em 01/10/2026: **236 testes aprovados em H2 e PostgreSQL 18 isolado**, sem falhas, erros ou ignorados. Foram acrescentados 19 casos de integração em `RegisterScheduleImportTests` e um caso de propagação de erro em `RegisterImportServiceTests`. Logs: `target/sheets-schedule-h2-tests.log` e `target/sheets-schedule-postgres-tests.log`. Essa execução não comprova proteção contra inscrições simultâneas em cursos distintos nem regras para horários nulos/reagendamento.
+
 Validação da V1 consolidada em 01/10/2026: **216 testes aprovados em H2 e PostgreSQL 18 isolado**, sem falhas, erros ou ignorados. Logs: `target/initial-schema-h2-tests.log` e `target/initial-schema-postgres-tests.log`. Os 13 casos de conversão de versões antigas foram substituídos por 12 casos da estrutura inicial e um caso adicional de concorrência de aulas.
 
 `InitialSchemaMigrationTests` verifica a criação em schema vazio, uma única V1 aplicada, reexecução sem alterações, tabelas atuais sem colunas legadas, geração de IDs e restrições de aulas/presenças. A suíte de persistência continua verificando os vínculos, unicidade de CPF/inscrição/presença e rollback.
@@ -314,7 +317,9 @@ Em `src/test/java/com/example/qualificamaisanalitic/services`, os testes de pess
 
 `CpfUtilsTests` e `CellphoneUtilsTests` cobrem formatação e normalização, CPF com zero inicial, telefone fixo/celular, prefixo `+55`, DDD 55, contato opcional ausente e quantidades inválidas de dígitos. Esses testes não comprovam validação dos dígitos verificadores de CPF nem existência dos números de telefone.
 
-`RegisterServiceTests` acrescenta CPF normalizado nas quatro operações, rejeição de comprimento inválido antes de acessar repositórios, sobreposição parcial/total, intervalos iguais ou encostados, dias diferentes, cursos sem aulas e conflito encontrado após outras inscrições/aulas. Cursos sem aulas continuam permitidos pela implementação; horários nulos, importação com conflito e reagendamento precisam de regras adicionais.
+`RegisterServiceTests` acrescenta CPF normalizado nas quatro operações, rejeição de comprimento inválido antes de acessar repositórios, sobreposição parcial/total, intervalos iguais ou encostados, dias diferentes, cursos sem aulas e conflito encontrado após outras inscrições/aulas. Cursos sem aulas continuam permitidos pela implementação; horários nulos e reagendamento precisam de regras adicionais.
+
+`RegisterScheduleImportTests` cobre horários carregados pelo ID do curso, conflitos com inscrições existentes e entre linhas em ambas as ordens, rollback de pessoa/endereço/deficiências, preservação de dados anteriores, reimportação e divergências, horários encostados, dias distintos e pessoas diferentes. Também verifica que inscrição direta e importação rejeitam conflitos criados pelo outro fluxo. Os testes usam transações reais do serviço, sem transação externa do teste. `RegisterImportServiceTests` verifica que o erro é propagado, sem retornar relatório de sucesso.
 
 `ConcurrentPersistenceTests` usa duas transações independentes sincronizadas antes da gravação para verificar que o banco aceita apenas uma inscrição pessoa/curso, presença pessoa/aula ou aula curso/dia duplicada. Essa cobertura não garante concorrência de horários entre cursos diferentes.
 

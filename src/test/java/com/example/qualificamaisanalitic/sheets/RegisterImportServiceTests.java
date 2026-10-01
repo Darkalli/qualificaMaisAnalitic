@@ -31,4 +31,19 @@ class RegisterImportServiceTests {
         assertThrows(IOException.class, () -> new RegisterImportService(collection, persistence).importRegisters());
         verifyNoInteractions(persistence);
     }
+
+    @Test
+    void propagatesScheduleConflictInsteadOfReportingSuccessfulImport() throws Exception {
+        var collection = mock(RegisterCollectionService.class);
+        var persistence = mock(RegisterPersistenceService.class);
+        var rows = new SheetImportResult(List.of(), List.of(), 0);
+        var conflict = new IllegalArgumentException("Horários conflitantes");
+        when(collection.collect()).thenReturn(rows);
+        when(persistence.persist(rows)).thenThrow(conflict);
+
+        assertSame(conflict, assertThrows(IllegalArgumentException.class,
+                () -> new RegisterImportService(collection, persistence).importRegisters()));
+
+        verify(persistence).persist(rows);
+    }
 }

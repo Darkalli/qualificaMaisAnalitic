@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import static com.utils.RegisterUtils.hasScheduleConflict;
+
 @Service
 public class RegisterPersistenceService {
     private final RegisterRepository repository;
@@ -57,6 +59,11 @@ public class RegisterPersistenceService {
             if (existing.isEmpty()) {
                 incoming.setPerson(savedPerson);
                 incoming.setCourseOfInterest(savedCourse);
+                if (hasScheduleConflict(repository, incoming)) {
+                    throw new IllegalArgumentException(
+                            "Não é possível se inscrever em cursos com horários conflitantes."
+                    );
+                }
                 repository.save(incoming);
                 inserted++;
                 if (!fields.isEmpty()) {
