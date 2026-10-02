@@ -44,13 +44,13 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | POST | `/api/courseClass` | `AddCourseClassDto`: dia, sessão, horários e referência `course: {"id": ...}`. | 201 + turma |
 | PATCH | `/api/courseClass` | `UpdateCourseClassDto`: `classId` e campos a atualizar. | 200 + turma |
 | GET | `/api/courseClass/courseClass/{courseId}` | Lista turmas de um curso existente. | 200 + lista |
-| DELETE | `/api/courseClass/courseClass/{id}` | Exclui pelo ID da turma. | 204 sem corpo |
+| DELETE | `/api/courseClass/courseClass/{id}` | Cancela a aula pelo ID, preservando o histórico. | 204 sem corpo |
 | POST | `/api/presence` | `AddPresenceDto`: `personId`, `courseClassId` e `status`. O curso vem da aula. | 201 + presença |
 | PATCH | `/api/presence` | `PresenceUpdateDto`: `personId`, `courseClassId` e novo `status`. | 200 + presença |
 | GET | `/api/presence/presence/{personId}` | Lista presenças da pessoa. | 200 + lista |
 | GET | `/api/presence` | **Corpo JSON** com `courseId` e `courseClassId`; filtra as presenças. | 200 + lista |
 | POST | `/api/register` | `AddRegisterDto`: `personCpf`, `courseOfInterestId` e `registerDate`. | 201 + inscrição |
-| GET | `/api/register/register/{cpf}` | Lista inscrições do CPF sem máscara. | 200 + lista |
+| GET | `/api/register/register/{cpf}` | Lista inscrições do CPF, aceitando máscara. | 200 + lista |
 | GET | `/api/register` | **Corpo JSON** com `personCpf` e `courseOfInterestId`. | 200 + inscrição |
 | DELETE | `/api/register` | Mesmo corpo da busca específica. | 204 sem corpo |
 
@@ -96,8 +96,8 @@ Turma (`POST /api/courseClass`), substituindo `42` pelo ID retornado no cadastro
 {
   "day": "2026-10-01",
   "session": "Manhã",
-  "start": "2026-10-01T08:00:00",
-  "finish": "2026-10-01T10:00:00",
+  "start": "08:00:00",
+  "finish": "10:00:00",
   "course": {"id": 42}
 }
 ```
@@ -110,7 +110,7 @@ Presença (`POST /api/presence`), usando IDs existentes de pessoa e aula:
 
 Os status disponíveis são `PRESENT`, `ABSENT` e `JUSTIFIED`. Criação e atualização identificam a presença por pessoa + aula, sem receber curso/data. O curso é obtido da aula na criação e o dia aparece em `courseClass.day` na resposta. Exemplo de atualização: `{"personId":7,"courseClassId":15,"status":"JUSTIFIED"}`. O GET de listagem recebe `{"courseId":42,"courseClassId":15}`; uma combinação incompatível retorna lista vazia. O DTO de filtro ainda conserva o nome `PresenceByDayAndCourseDto`, mas seu campo atual é `courseClassId`.
 
-`PresenceService` verifica pessoa/aula existentes e duplicidade na criação; criação e atualização executam em transação. A V1 exige `course_class_id`, sua chave estrangeira e unicidade de pessoa/aula. A atualização altera apenas o status. Ainda não há validação de inscrição da pessoa no curso. A coluna `course_id` de presença é preenchida a partir da aula; a consistência desse valor se o curso de uma aula for alterado depois ainda precisa de uma regra específica.
+`PresenceService` verifica pessoa/aula existentes, inscrição da pessoa no curso da aula e duplicidade na criação; criação e atualização executam em transação. A V1 exige `course_class_id`, sua chave estrangeira e unicidade de pessoa/aula. A atualização altera apenas o status. A coluna `course_id` de presença é preenchida a partir da aula; uma aula com presenças não pode mudar de curso, dia ou horários, preservando os vínculos históricos.
 
 Inscrição (`POST /api/register`), usando pessoa e curso existentes:
 
@@ -118,7 +118,7 @@ Inscrição (`POST /api/register`), usando pessoa e curso existentes:
 {"personCpf":"01234567890","courseOfInterestId":42,"registerDate":"2026-10-01"}
 ```
 
-O serviço de inscrição exige CPF sem máscara. GET e DELETE em `/api/register` recebem `{"personCpf":"01234567890","courseOfInterestId":42}`. Não existe PATCH de inscrição.
+O serviço de inscrição normaliza CPF nas quatro operações, aceitando máscara e removendo caracteres não numéricos antes de validar 11 dígitos. GET e DELETE em `/api/register` recebem `{"personCpf":"01234567890","courseOfInterestId":42}`. Não existe PATCH de inscrição.
 
 ### Respostas e limites atuais
 
@@ -126,7 +126,7 @@ As respostas usam as entidades JPA diretamente. Um curso inclui `courseClass`; c
 
 JSON malformado, corpo obrigatório ausente e ID de caminho com formato inválido retornam 400; método HTTP não suportado retorna 405. Ainda não há tratamento global que traduza pessoa/curso inexistente, CPF inválido ou conflito no banco em respostas de negócio padronizadas, como 404/409. Também não há validação completa de campos com Bean Validation. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
 
-Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. A inscrição direta e a importação compartilham a checagem de horários. Validar inscrição para registrar presença continua pendente; a unicidade pessoa/aula é garantida pela V1.
+Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. A inscrição direta e a importação compartilham a checagem de horários. Presença exige inscrição no curso da aula; a unicidade pessoa/aula é garantida pela V1.
 
 ### Uma aula por curso e dia
 
@@ -137,12 +137,23 @@ A regra é aplicada no serviço e no banco:
 - A edição carrega a aula, combina os valores enviados no PATCH com os salvos e consulta duplicidade excluindo o próprio ID. Reenviar curso/dia da própria aula é permitido; alterar somente curso ou dia também verifica a combinação final antes de modificar campos.
 - A V1 cria `UNIQUE(course_id, class_day)` e `NOT NULL` nas duas colunas. O mapeamento JPA declara as mesmas restrições e o Hibernate valida o schema.
 - A restrição no banco também impede duplicatas em gravações diretas e simultâneas.
-- A consistência entre dia e horários, horários desconhecidos e reagendamento continuam dependendo de regras adicionais.
+- A V2 exige sessão, início e fim não nulos. A V3 usa `TIME` e exige início anterior ao fim; a data fica somente em `day`. Criação e PATCH validam os valores finais antes de salvar.
 
 `CourseClassServiceTests` e `CourseClassDailyRuleTests` cobrem criação duplicada, cursos/dias diferentes, atualização da própria aula e PATCH parcial conflitante ou permitido. `InitialSchemaMigrationTests` verifica escrita direta, nulos e referências ausentes; `ConcurrentPersistenceTests` verifica duas transações disputando o mesmo curso/dia.
 
 Referências: [`UniqueConstraint` em Jakarta Persistence](https://jakarta.ee/specifications/persistence/3.2/apidocs/jakarta.persistence/jakarta/persistence/uniqueconstraint) e [restrições do PostgreSQL](https://www.postgresql.org/docs/current/ddl-constraints.html).
 
+### Status, reagendamento e concorrência de aulas
+
+Aulas começam com `statusClass: "ACTIVE"`. O PATCH permite `ACTIVE`, `CANCELED` ou `POSTPONED`, por exemplo `{"classId":15,"statusClass":"POSTPONED"}`. Horários usam `HH:mm:ss`; valores iguais, invertidos ou ausentes no cadastro são rejeitados. Não há aula atravessando meia-noite no modelo atual.
+
+O DELETE de aula altera o status para `CANCELED`. A aula e suas presenças permanecem nas consultas. Canceladas/adiadas não contam no conflito de horários e não recebem novas presenças. É possível corrigir o status de uma presença já existente. A unicidade curso/dia continua valendo para aulas inativas.
+
+Criar, reagendar ou reativar uma aula verifica conflitos de todos os inscritos. Aulas com presenças não podem alterar curso, dia ou horários. Uma alteração recusada não salva outros campos enviados no mesmo PATCH. Sem presenças, uma aula adiada pode receber nova data/horário e `ACTIVE` no mesmo PATCH.
+
+Inscrição e presença usam lock de leitura no curso antes do lock de escrita da pessoa. Alterar aula usa lock de escrita nos cursos envolvidos antes de bloquear os inscritos por CPF. Importações bloqueiam todos os cursos por ID e todas as pessoas por CPF, em ordem crescente, mantendo a ordem original no processamento/relatório. Assim, os fluxos coordenam alteração de horários e novas inscrições sem inverter a ordem de aquisição dos bloqueios.
+
+Um CPF novo ainda pode disputar a restrição de unicidade; a transação perdedora reverte integralmente e pode tentar novamente. O scheduler faz nova tentativa no próximo ciclo. Não há retry automático dentro da mesma chamada nem garantia para alterações por SQL externo aos serviços.
 ## Persistência atual e reimportação
 
 Existe uma pessoa por CPF normalizado e cada `Register` contém a pessoa, uma referência obrigatória a `Course` e a data de inscrição. Cursos diferentes podem reutilizar a mesma pessoa. A identidade da inscrição é a combinação de pessoa e ID do curso (`person_id`, `course_id`); a data não faz parte dessa chave. Renomear um curso não cria outra inscrição, e cursos com nomes iguais continuam distintos pelos IDs. A inscrição direta e a importação chamam `RegisterUtils.hasScheduleConflict()` para novas inscrições, comparando aulas do mesmo dia. Horários encostados são permitidos. A tabela abaixo descreve o comportamento da importação.
@@ -170,13 +181,15 @@ O serviço de persistência recebe inscrições com pessoa e endereço novos, co
 
 ### Preparar o PostgreSQL
 
-Crie um banco vazio e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica somente `src/main/resources/db/migration/V1__create_initial_schema.sql`, criando endereço, pessoa, deficiências, curso, inscrição, aula e presença com IDs automáticos, chaves estrangeiras, índices e restrições. O Hibernate valida a estrutura (`ddl-auto=validate`).
+Crie um banco vazio e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica `V1__create_initial_schema.sql`, criando as sete tabelas, `V2__require_class_session_and_times.sql`, tornando sessão/início/fim obrigatórios, e `V3__class_times_and_status.sql`, convertendo horários para `TIME` e criando o status da aula. O Hibernate valida a estrutura (`ddl-auto=validate`).
+
+Em um banco que já tem a V1 consolidada, a V2 preserva dados e IDs, mas exige corrigir previamente aulas com sessão/horários nulos. A migração falha se encontrar esses dados; não preenche valores nem exclui aulas automaticamente. As anotações JPA são `@Column(nullable=false)` nos campos simples; a FK continua em `CourseClass.course`, e a coleção inversa em `Course` usa somente `mappedBy`.
 
 O histórico anterior foi consolidado durante o desenvolvimento, quando seus dados eram descartáveis. A nova V1 não converte bancos com as versões antigas: esses bancos precisam ser recriados de forma explícita. Não use `repair` ou `baseline-on-migrate` para tratar as estruturas como equivalentes. A aplicação não apaga dados automaticamente; `clean-disabled=true` permanece habilitado.
 
 A configuração compartilhada fica em `src/main/resources/application.yaml`; as credenciais continuam no `.properties` local. Todos os enums são persistidos pelo nome. Inscrição, pessoa e endereço têm IDs automáticos. O endereço é gravado por cascata com a pessoa, e o serviço associa a pessoa persistida à inscrição na mesma transação.
 
-Novas alterações que precisem preservar dados devem evoluir com V2, V3 e seguintes, sem modificar essa V1 depois de aplicada.
+Novas alterações devem evoluir com V4 e seguintes, sem modificar migrações já aplicadas.
 
 Para importar usando outro componente Spring, injete `RegisterImportService`:
 
@@ -295,40 +308,30 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 .\mvnw.cmd test
 ```
 
-Os testes usam dados fictícios e não acessam o Google nem o PostgreSQL configurado no arquivo local. O perfil `test` usa H2 em memória e executa as mesmas migrações Flyway da aplicação, com validação do schema pelo Hibernate.
+O perfil `test` usa dados fictícios, H2 em memória, Flyway e validação de schema; coleta Google desabilitada. Não acessa o banco de trabalho. Resultado de 02/10/2026: **289 testes aprovados em H2 e PostgreSQL 18.6 isolado**, sem falhas, erros ou ignorados. Logs: `target/class-flow-h2-tests.log` e `target/class-flow-postgres-tests.log`.
 
-Validação da checagem de horários na importação em 01/10/2026: **236 testes aprovados em H2 e PostgreSQL 18 isolado**, sem falhas, erros ou ignorados. Foram acrescentados 19 casos de integração em `RegisterScheduleImportTests` e um caso de propagação de erro em `RegisterImportServiceTests`. Logs: `target/sheets-schedule-h2-tests.log` e `target/sheets-schedule-postgres-tests.log`. Essa execução não comprova proteção contra inscrições simultâneas em cursos distintos nem regras para horários nulos/reagendamento.
+| Área | Cobertura |
+| --- | --- |
+| API e serviços | 20 casos MockMvc para os 22 endpoints; cadastro, consulta, PATCH, cancelamento, status, presença com inscrição, JSON e erros de formato. Erros de negócio ainda não têm contrato global 404/409. |
+| Importação | Reimportação, divergências, dados preservados, horários por ID de curso, conflitos existentes/entre linhas e rollback do lote, endereço e deficiências. |
+| Regras de aula | `ClassScheduleLifecycleTests`: 15 casos de criação após inscrição, reagendamento, validação de horários, cancelamento/adiamento, reativação e proteção de presenças. |
+| Concorrência | Unicidade de pessoa/curso, pessoa/aula e curso/dia; 11 casos de inscrição API/Sheets e 12 casos de lotes em ordem inversa, mudanças de aula versus inscrição e cancelamento versus presença. |
+| Migrações | V1 inicial, V2 campos obrigatórios e cinco casos da V3: conversão para hora, status inicial, IDs/dados preservados, reexecução e restrições SQL. |
+| Validação | CPF conforme limpeza definida, telefones, deficiências, campos omitidos, mapper, coleta/scheduler simulados e contexto Spring. |
 
-Validação da V1 consolidada em 01/10/2026: **216 testes aprovados em H2 e PostgreSQL 18 isolado**, sem falhas, erros ou ignorados. Logs: `target/initial-schema-h2-tests.log` e `target/initial-schema-postgres-tests.log`. Os 13 casos de conversão de versões antigas foram substituídos por 12 casos da estrutura inicial e um caso adicional de concorrência de aulas.
+As verificações de concorrência usam transações independentes e conferem o estado confirmado. A suíte não equivale a teste de carga ou validação operacional do servidor. CPF é normalizado por quantidade de dígitos, sem cálculo de dígitos verificadores.
 
-`InitialSchemaMigrationTests` verifica a criação em schema vazio, uma única V1 aplicada, reexecução sem alterações, tabelas atuais sem colunas legadas, geração de IDs e restrições de aulas/presenças. A suíte de persistência continua verificando os vínculos, unicidade de CPF/inscrição/presença e rollback.
-
-`PersonDisabilitiesPersistenceTests` valida a gravação, leitura e atualização das deficiências da pessoa. Execute-o com `.\mvnw.cmd test "-Dtest=PersonDisabilitiesPersistenceTests"`.
-
-`RegisterPersistenceTests` cobre gravação completa, IDs automáticos, CPF com zero inicial, inscrições diferentes para a mesma pessoa, reimportação, divergências, rollback, unicidade de CPF/inscrição e ausência de CPF nos logs de falha SQL. Também verifica cursos inexistentes, cursos de mesmo nome, renomeação e a chave estrangeira obrigatória. `RegisterSheetMapperTests` valida os IDs e aliases da planilha. `RegisterImportServiceTests` cobre a ligação entre coleta e persistência.
-
-Em `src/test/java/com/example/qualificamaisanalitic/services`, os testes de pessoa, curso, turma, presença e inscrição verificam cadastro, atualização parcial, consultas, exclusão e registros inexistentes. Os testes unitários usam repositórios simulados e os mappers reais gerados pelo MapStruct. `ServicesPersistenceTests` exercita os serviços com H2/Flyway, incluindo unicidade de inscrição, presenças em cursos diferentes no mesmo dia e atualização de deficiências sem uma transação aberta pelo chamador. Também verifica que uma atualização inválida não altera os dados salvos. `CoursePresencePersistenceTests` verifica os relacionamentos e a leitura das novas tabelas.
-
-`controllers/ApiControllerTests` exercita os 22 endpoints implementados com MockMvc, contexto Spring, serviços reais e banco de testes, sem abrir uma porta HTTP. Seus 18 casos cobrem ciclos de cadastro/consulta/atualização/exclusão, ordenação de pessoas, normalização, campos omitidos, filtros de presença por pessoa/aula/curso, JSON sem recursão, status 201/200/204 e erros 400/405. Inscrição também cobre reutilização da pessoa, CPF com máscara, exclusão isolada, duplicidade, referências ausentes e horários sobrepostos/encostados. Erros de negócio ainda são exceções propagadas pelo MockMvc, sem pressupor contratos 404/409. Os testes não usam uma transação externa para esconder falhas de persistência entre requisições. O scheduler fica desabilitado. Execute apenas esses cenários com:
+Para apenas API ou os novos fluxos:
 
 ```powershell
 .\mvnw.cmd test "-Dtest=ApiControllerTests"
+.\mvnw.cmd test "-Dtest=ClassScheduleLifecycleTests,ConcurrentClassAndBatchTests,ClassTimeStatusMigrationTests"
 ```
 
-`CpfUtilsTests` e `CellphoneUtilsTests` cobrem formatação e normalização, CPF com zero inicial, telefone fixo/celular, prefixo `+55`, DDD 55, contato opcional ausente e quantidades inválidas de dígitos. Esses testes não comprovam validação dos dígitos verificadores de CPF nem existência dos números de telefone.
-
-`RegisterServiceTests` acrescenta CPF normalizado nas quatro operações, rejeição de comprimento inválido antes de acessar repositórios, sobreposição parcial/total, intervalos iguais ou encostados, dias diferentes, cursos sem aulas e conflito encontrado após outras inscrições/aulas. Cursos sem aulas continuam permitidos pela implementação; horários nulos e reagendamento precisam de regras adicionais.
-
-`RegisterScheduleImportTests` cobre horários carregados pelo ID do curso, conflitos com inscrições existentes e entre linhas em ambas as ordens, rollback de pessoa/endereço/deficiências, preservação de dados anteriores, reimportação e divergências, horários encostados, dias distintos e pessoas diferentes. Também verifica que inscrição direta e importação rejeitam conflitos criados pelo outro fluxo. Os testes usam transações reais do serviço, sem transação externa do teste. `RegisterImportServiceTests` verifica que o erro é propagado, sem retornar relatório de sucesso.
-
-`ConcurrentPersistenceTests` usa duas transações independentes sincronizadas antes da gravação para verificar que o banco aceita apenas uma inscrição pessoa/curso, presença pessoa/aula ou aula curso/dia duplicada. Essa cobertura não garante concorrência de horários entre cursos diferentes.
-
-Também é possível executar a suíte em um **banco PostgreSQL exclusivo para testes**, já criado e inicialmente vazio. Os testes apagam os registros de suas tabelas entre casos; nunca indique um banco de trabalho:
+Também é possível usar PostgreSQL exclusivo para testes, criado previamente e inicialmente vazio:
 
 ```powershell
-.\mvnw.cmd test "-Dtest.db.url=jdbc:postgresql://127.0.0.1:55439/persistence_tests" "-Dtest.db.driver=org.postgresql.Driver" "-Dtest.db.username=persistence_test"
+.\mvnw.cmd test "-Dtest.db.url=jdbc:postgresql://127.0.0.1:55449/class_flow_tests" "-Dtest.db.driver=org.postgresql.Driver" "-Dtest.db.username=class_test"
 ```
 
-Se necessário, forneça a senha de teste pela variável de ambiente `TEST_DB_PASSWORD`. As demais substituições são `test.db.url`, `test.db.driver` e `test.db.username`.
-
-A leitura usa `ROWS` e `FORMATTED_VALUE`, incluindo tratamento das células finais vazias que a API omite, conforme a [documentação de leitura do Google Sheets](https://developers.google.com/workspace/sheets/api/guides/values).
+A porta e o banco são exemplos; o servidor usado na validação foi encerrado. Senha opcional por `TEST_DB_PASSWORD`. Os testes removem registros e criam schemas temporários: nunca apontar para banco de trabalho.

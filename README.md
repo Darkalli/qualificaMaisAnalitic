@@ -28,7 +28,7 @@ Backend para gerenciar pessoas, cursos, turmas, inscrições e presenças. Ofere
 
 A API fica em `http://localhost:8080` por padrão. Na IDE, execute `com.QualificaMaisAnaliticApplication` com o processamento de anotações habilitado para Lombok e MapStruct.
 
-O Flyway cria o schema completo com `V1__create_initial_schema.sql` e o Hibernate valida as tabelas. A V1 consolidada exige um banco vazio; não atualiza instalações com as migrações antigas. Veja os [detalhes de migração](docs/guia-tecnico.md#preparar-o-postgresql).
+O Flyway aplica V1–V3: estrutura inicial, campos obrigatórios e horários/status de aulas. A V3 usa horários sem data e exige início anterior ao fim. A V1 consolidada não converte instalações com o histórico antigo. Veja os [detalhes de migração](docs/guia-tecnico.md#preparar-o-postgresql).
 
 ## API
 
@@ -36,13 +36,13 @@ O Flyway cria o schema completo com `V1__create_initial_schema.sql` e o Hibernat
 | --- | --- | --- |
 | Pessoas | `/api/person` | Cadastro, atualização, listagem, busca por CPF e exclusão |
 | Cursos | `/api/course` | Cadastro, atualização, listagem, busca por nome e exclusão |
-| Turmas | `/api/courseClass` | Cadastro, atualização, consulta por curso e exclusão |
+| Turmas | `/api/courseClass` | Cadastro, atualização/status, consulta por curso e cancelamento |
 | Presenças | `/api/presence` | Registro/atualização por pessoa + aula; consultas por pessoa ou aula/curso |
 | Inscrições | `/api/register` | Criação, consulta por CPF ou CPF/curso e exclusão |
 
 POST e PATCH recebem JSON. Criações retornam **201**, consultas e atualizações **200**, e exclusões **204**.
 
-Consulte as [rotas completas e exemplos](docs/guia-tecnico.md#api-http): algumas URLs repetem o recurso, como `/api/person/person/{cpf}`, e os GETs de presença por curso/data e de inscrição por CPF/curso exigem corpo JSON. Endereços não têm endpoints próprios.
+Consulte as [rotas completas e exemplos](docs/guia-tecnico.md#api-http): algumas URLs repetem o recurso, como `/api/person/person/{cpf}`, e os GETs de presença por curso/aula e de inscrição por CPF/curso exigem corpo JSON. Endereços não têm endpoints próprios.
 
 ## Importação do Google Sheets
 
@@ -86,7 +86,7 @@ Para executar apenas os testes da API:
 
 ## Estado atual
 
-O projeto está em desenvolvimento. Ainda faltam autenticação, tratamento padronizado de erros da API, validação completa das entradas, regras de conflito de horários e unicidade de presenças. As respostas HTTP usam entidades JPA diretamente.
+Inscrição, importação e alteração de aulas verificam conflitos com bloqueios transacionais. Lotes bloqueiam cursos e pessoas em ordem fixa. Presença exige inscrição e aula ativa. Cancelamento preserva o histórico; aulas canceladas/adiadas não ocupam horário para inscrições. Ainda faltam autenticação, erros padronizados e validações restantes. As respostas HTTP usam entidades JPA diretamente.
 
 A criação e a edição de aulas consultam duplicidade por curso/dia, considerando a própria aula e campos omitidos. A V1 também garante curso/dia obrigatórios e únicos no banco, inclusive em gravações simultâneas. Veja os [detalhes da regra de aulas](docs/guia-tecnico.md#uma-aula-por-curso-e-dia).
 
