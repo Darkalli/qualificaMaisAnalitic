@@ -38,6 +38,7 @@ class PersonTests {
     @Test
     void createsCompletePersonWithNormalizedCpfAndBothPhones() {
         var dto = ServiceTestData.addPerson("012.345.678-90", "+55 (11) 99999-0000", "(11) 3333-4444");
+        dto.address().setId(99L);
         service.addPerson(dto);
         var capture = ArgumentCaptor.forClass(Person.class);
         verify(repository).save(capture.capture());
@@ -50,7 +51,11 @@ class PersonTests {
         assertEquals(dto.fullName(), saved.getFullName());
         assertEquals(dto.socialName(), saved.getSocialName());
         assertEquals(dto.email(), saved.getEmail());
-        assertSame(dto.address(), saved.getAddress());
+        assertNotSame(dto.address(), saved.getAddress());
+        assertNull(saved.getAddress().getId());
+        assertEquals(dto.address().getNumber(), saved.getAddress().getNumber());
+        assertEquals(dto.address().getStreet(), saved.getAddress().getStreet());
+        assertEquals(dto.address().getNeighborhood(), saved.getAddress().getNeighborhood());
         assertEquals(dto.gender(), saved.getGender());
         assertEquals(dto.education(), saved.getEducation());
         assertEquals(dto.workState(), saved.getWorkState());

@@ -2,6 +2,7 @@ package com.services;
 
 import com.dtos.personDtos.AddPersonDto;
 import com.dtos.personDtos.UpdatePersonDto;
+import com.entities.Address;
 import com.entities.Person;
 import com.enums.Disabilities;
 import com.mappers.PersonMapper;
@@ -35,9 +36,15 @@ public class PersonService {
         String familyPhone = cleanPhone(addPerson.familyPhone());
         Set<Disabilities> newDisabilities = Disabilities.processAndValidateDisabilities(
                 addPerson.disabilities() == null ? null : new ArrayList<>(addPerson.disabilities()));
+        if (addPerson.address() == null) {
+            throw new IllegalArgumentException("O endereço é obrigatório.");
+        }
+        Address address = new Address(addPerson.address().getNumber(),
+                addPerson.address().getStreet(), addPerson.address().getNeighborhood());
+
         return personRepository.save(new Person(addPerson.fullName(), addPerson.socialName(), cpf ,
                 addPerson.email(), cellphone, addPerson.personalPhoneHasWhatsapp(),
-                familyPhone, addPerson.address(), addPerson.gender(), addPerson.education(),
+                familyPhone, address, addPerson.gender(), addPerson.education(),
                 addPerson.workState(),newDisabilities));
     }
 
