@@ -25,6 +25,9 @@ public class CourseService {
         return courseRepository.save(new Course(courseDto.name(), courseDto.description(),courseDto.start(), courseDto.finish()));
     }
     public Course updateCourse (UpdateCourseDto courseDto){
+        if (courseDto.courseId() == null) {
+            throw new IllegalArgumentException("O ID do curso é obrigatório.");
+        }
         Course course = courseRepository.findByid(courseDto.courseId())
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
         mapper.updateCoursefromDto(courseDto, course);
@@ -32,7 +35,9 @@ public class CourseService {
     }
 
     public void deleteCourse(Long courseId){
-        courseRepository.delete(courseRepository.getById(courseId));
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
+        courseRepository.delete(course);
     }
 
     public List<Course> getAllCourses(){

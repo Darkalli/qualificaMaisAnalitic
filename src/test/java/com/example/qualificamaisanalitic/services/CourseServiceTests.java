@@ -99,7 +99,7 @@ class CourseServiceTests {
     @Test
     void deletesTheRequestedCourse() {
         var course = new Course();
-        when(repository.getById(Long.valueOf(3))).thenReturn(course);
+        when(repository.findById(3L)).thenReturn(Optional.of(course));
         service.deleteCourse(3L);
         verify(repository).delete(course);
     }

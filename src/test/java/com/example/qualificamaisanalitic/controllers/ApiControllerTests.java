@@ -1,8 +1,6 @@
 package com.example.qualificamaisanalitic.controllers;
 
 import com.jayway.jsonpath.JsonPath;
-import jakarta.persistence.EntityNotFoundException;
-import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,7 +9,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -188,20 +185,19 @@ class ApiControllerTests {
                 createRegistration("01234567890", otherCourseId);
                 createRegistration("98765432100", courseId);
             }
-            var error = assertThrows(ServletException.class, () -> mvc.perform(post("/api/presence")
-                    .contentType(APPLICATION_JSON).content(body)));
-            assertInstanceOf(IllegalArgumentException.class, error.getCause());
-            assertEquals("A pessoa não possui inscrição no curso desta aula.", error.getCause().getMessage());
+            mvc.perform(post("/api/presence").contentType(APPLICATION_JSON).content(body))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.message").value("A pessoa não possui inscrição no curso desta aula."));
             assertEquals(0, jdbc.queryForObject("select count(*) from presence", Integer.class));
         }
 
         createRegistration("01234567890", courseId);
         mvc.perform(post("/api/presence").contentType(APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated());
-        var duplicate = assertThrows(ServletException.class, () -> mvc.perform(post("/api/presence")
-                .contentType(APPLICATION_JSON).content(body)));
-        assertInstanceOf(IllegalArgumentException.class, duplicate.getCause());
-        assertTrue(duplicate.getCause().getMessage().contains("já possui uma presença"));
+        mvc.perform(post("/api/presence").contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("O Aluno(a) já possui uma presença registrada para esta aula."));
         assertEquals(1, jdbc.queryForObject("select count(*) from presence", Integer.class));
     }
 
@@ -209,8 +205,10 @@ class ApiControllerTests {
     @ValueSource(strings = {"/api/person", "/api/course", "/api/courseClass", "/api/presence", "/api/register"})
     void rejectsMalformedJsonAndMissingBodyWithoutSaving(String route) throws Exception {
         mvc.perform(post(route).contentType(APPLICATION_JSON).content("{invalid"))
-                .andExpect(status().isBadRequest());
-        mvc.perform(post(route).contentType(APPLICATION_JSON)).andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+        mvc.perform(post(route).contentType(APPLICATION_JSON)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400)).andExpect(jsonPath("$.message").isNotEmpty());
         for (String table : new String[]{"person", "address", "course", "course_class", "presence", "register"}) {
             assertEquals(0, jdbc.queryForObject("select count(*) from " + table, Integer.class));
         }
@@ -218,9 +216,11 @@ class ApiControllerTests {
 
     @Test
     void rejectsInvalidPathIdAndUnsupportedMethod() throws Exception {
-        mvc.perform(delete("/api/course/course/not-a-number")).andExpect(status().isBadRequest());
+        mvc.perform(delete("/api/course/course/not-a-number")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
         mvc.perform(put("/api/course").contentType(APPLICATION_JSON).content("{}"))
-                .andExpect(status().isMethodNotAllowed());
+                .andExpect(status().isMethodNotAllowed()).andExpect(jsonPath("$.status").value(405))
+                .andExpect(header().string("Allow", org.hamcrest.Matchers.containsString("POST")));
         // O contrato atual exige JSON no GET; query parameters ainda não substituem o corpo.
         mvc.perform(get("/api/presence").param("courseId", "1").param("courseClassId", "2"))
                 .andExpect(status().isBadRequest());
@@ -280,12 +280,12 @@ class ApiControllerTests {
         long courseId = id(createCourse("Curso A"));
         long registerId = id(createRegistration("01234567890", courseId));
 
-        // Sem tratamento global, MockMvc propaga a exceção; não há contrato HTTP 409 definido.
-        var error = assertThrows(ServletException.class, () -> mvc.perform(post("/api/register")
+        mvc.perform(post("/api/register")
                 .contentType(APPLICATION_JSON).content("""
                         {"personCpf":"012.345.678-90","courseOfInterestId":%d,"registerDate":"2026-10-02"}
-                        """.formatted(courseId))));
-        assertInstanceOf(DataIntegrityViolationException.class, error.getCause());
+                        """.formatted(courseId)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("Já existe um registro com os dados informados."));
         mvc.perform(get("/api/register").contentType(APPLICATION_JSON)
                         .content(registrationKey("01234567890", courseId)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(registerId))
@@ -300,9 +300,9 @@ class ApiControllerTests {
         long courseId = id(createCourse("Curso A"));
         for (String payload : new String[]{registrationBody("98765432100", courseId),
                 registrationBody("01234567890", -1)}) {
-            var error = assertThrows(ServletException.class, () -> mvc.perform(post("/api/register")
-                    .contentType(APPLICATION_JSON).content(payload)));
-            assertInstanceOf(EntityNotFoundException.class, error.getCause());
+            mvc.perform(post("/api/register").contentType(APPLICATION_JSON).content(payload))
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404))
+                    .andExpect(jsonPath("$.message").isNotEmpty());
         }
         assertEquals(0, jdbc.queryForObject("select count(*) from register", Integer.class));
     }
@@ -314,9 +314,9 @@ class ApiControllerTests {
         createRegistration("01234567890", courseId);
         for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[]{
                 get("/api/register"), delete("/api/register")}) {
-            var error = assertThrows(ServletException.class, () -> mvc.perform(request
-                    .contentType(APPLICATION_JSON).content(registrationKey("012.345.678-90", -1))));
-            assertInstanceOf(EntityNotFoundException.class, error.getCause());
+            mvc.perform(request.contentType(APPLICATION_JSON).content(registrationKey("012.345.678-90", -1)))
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404))
+                    .andExpect(jsonPath("$.message").value("Inscrição não encontrada para a pessoa e o curso informados."));
         }
         assertEquals(1, jdbc.queryForObject("select count(*) from register", Integer.class));
     }
@@ -332,9 +332,10 @@ class ApiControllerTests {
         createClass(touchingId, 10, 12);
         createRegistration("01234567890", existingId);
 
-        var error = assertThrows(ServletException.class, () -> mvc.perform(post("/api/register")
-                .contentType(APPLICATION_JSON).content(registrationBody("012.345.678-90", conflictingId))));
-        assertInstanceOf(IllegalArgumentException.class, error.getCause());
+        mvc.perform(post("/api/register").contentType(APPLICATION_JSON)
+                        .content(registrationBody("012.345.678-90", conflictingId)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").isNotEmpty());
         assertEquals(1, jdbc.queryForObject("select count(*) from register", Integer.class));
 
         createRegistration("012.345.678-90", touchingId);
@@ -364,6 +365,115 @@ class ApiControllerTests {
         assertEquals(0, jdbc.queryForObject("select count(*) from register", Integer.class));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/person", "/api/courseClass", "/api/presence", "/api/register"})
+    void requiredCreateFieldsReturnBadRequestWithoutSaving(String route) throws Exception {
+        mvc.perform(post(route).contentType(APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
+        for (String table : new String[]{"person", "address", "course_class", "presence", "register"}) {
+            assertEquals(0, jdbc.queryForObject("select count(*) from " + table, Integer.class));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/person", "/api/course", "/api/courseClass", "/api/presence"})
+    void patchRequiresItsIdentifiers(String route) throws Exception {
+        mvc.perform(patch(route).contentType(APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void queryAndDeletionRequireTheirBodyFields() throws Exception {
+        for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[]{
+                get("/api/presence"), get("/api/register"), delete("/api/register")}) {
+            mvc.perform(request.contentType(APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/person/person/-1", "/api/course/course/-1", "/api/courseClass/courseClass/-1"})
+    void deletingAnUnknownRecordReturnsNotFound(String route) throws Exception {
+        mvc.perform(delete(route)).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404)).andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void duplicateCpfAndReferencedCourseReturnConflictWithoutExposingDatabaseDetails() throws Exception {
+        createPerson("01234567890", "Pessoa Exemplo");
+        mvc.perform(post("/api/person").contentType(APPLICATION_JSON)
+                        .content(personBody("01234567890", "Pessoa Duplicada")))
+                .andExpect(status().isConflict()).andExpect(content().json("""
+                        {"status":409,"message":"Já existe um registro com os dados informados."}
+                        """));
+        long courseId = id(createCourse("Curso A"));
+        createRegistration("01234567890", courseId);
+        mvc.perform(delete("/api/course/course/{id}", courseId))
+                .andExpect(status().isConflict()).andExpect(content().json("""
+                        {"status":409,"message":"A operação conflita com os vínculos entre os registros."}
+                        """));
+        assertEquals(1, jdbc.queryForObject("select count(*) from course", Integer.class));
+        assertEquals(1, jdbc.queryForObject("select count(*) from person", Integer.class));
+        assertEquals(1, jdbc.queryForObject("select count(*) from register", Integer.class));
+    }
+
+    @Test
+    void classValidationAndDuplicateDayUseDifferentStatuses() throws Exception {
+        long courseId = id(createCourse("Curso A"));
+        long classId = id(createClass(courseId));
+        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON)
+                        .content("{\"classId\":%d,\"finish\":\"08:00:00\"}".formatted(classId)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
+                {"day":"2026-10-01","session":"Tarde","start":"14:00:00","finish":"16:00:00","course":{"id":%d}}
+                """.formatted(courseId)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409));
+        assertEquals(1, jdbc.queryForObject("select count(*) from course_class", Integer.class));
+    }
+
+    @Test
+    void classHistoryAndCanceledAttendanceReturnConflictAndPreserveHistory() throws Exception {
+        long personId = id(createPerson("01234567890", "Pessoa Exemplo"));
+        long otherPersonId = id(createPerson("98765432100", "Outra Pessoa"));
+        long courseId = id(createCourse("Curso A"));
+        long classId = id(createClass(courseId));
+        createRegistration("01234567890", courseId);
+        createRegistration("98765432100", courseId);
+        mvc.perform(post("/api/presence").contentType(APPLICATION_JSON).content("""
+                {"personId":%d,"courseClassId":%d,"status":"PRESENT"}
+                """.formatted(personId, classId))).andExpect(status().isCreated());
+        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON)
+                        .content("{\"classId\":%d,\"day\":\"2026-10-02\"}".formatted(classId)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409));
+        mvc.perform(delete("/api/courseClass/courseClass/{id}", classId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/presence").contentType(APPLICATION_JSON).content("""
+                {"personId":%d,"courseClassId":%d,"status":"PRESENT"}
+                """.formatted(otherPersonId, classId)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409));
+        assertEquals(1, jdbc.queryForObject("select count(*) from presence", Integer.class));
+    }
+
+    @Test
+    void invalidCpfAndPhoneReturnReadableValidationErrors() throws Exception {
+        mvc.perform(get("/api/person/person/123")).andExpect(status().isBadRequest())
+                .andExpect(content().json("{\"status\":400,\"message\":\"CPF deve conter 11 dígitos.\"}"));
+        createPerson("01234567890", "Pessoa Exemplo");
+        mvc.perform(patch("/api/person").contentType(APPLICATION_JSON)
+                        .content("{\"Cpf\":\"01234567890\",\"personalPhone\":\"invalid\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void unknownRouteAndUnsupportedContentTypeUseTheSameErrorFormat() throws Exception {
+        mvc.perform(get("/api/unknown")).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404)).andExpect(jsonPath("$.message").isNotEmpty());
+        mvc.perform(post("/api/course").contentType("text/plain").content("example"))
+                .andExpect(status().isUnsupportedMediaType()).andExpect(jsonPath("$.status").value(415));
+    }
+
     private String registrationKey(String cpf, long courseId) {
         return "{\"personCpf\":\"%s\",\"courseOfInterestId\":%d}".formatted(cpf, courseId);
     }
@@ -387,13 +497,18 @@ class ApiControllerTests {
     }
 
     private ResultActions createPerson(String cpf, String name) throws Exception {
-        return mvc.perform(post("/api/person").contentType(APPLICATION_JSON).content("""
+        return mvc.perform(post("/api/person").contentType(APPLICATION_JSON).content(personBody(cpf, name)))
+                .andExpect(status().isCreated());
+    }
+
+    private String personBody(String cpf, String name) {
+        return """
                 {"fullName":"%s","cpf":"%s","email":"pessoa@example.com",
                  "personalPhone":"(11) 99999-0000","personalPhoneHasWhatsapp":false,
                  "address":{"street":"Rua Exemplo","number":42,"neighborhood":"Centro"},
                  "gender":"FEMALE","education":"HIGH_SCHOOL_COMPLETE","workState":"ONLY_STUDYING",
                  "disabilities":["Auditiva","HEARING","1"]}
-                """.formatted(name, cpf))).andExpect(status().isCreated());
+                """.formatted(name, cpf);
     }
 
     private ResultActions createCourse(String name) throws Exception {

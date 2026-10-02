@@ -43,6 +43,9 @@ public class PersonService {
 
     @Transactional
     public Person updatePerson (UpdatePersonDto updatePerson){
+        if (updatePerson.Cpf() == null) {
+            throw new IllegalArgumentException("O CPF é obrigatório.");
+        }
         String cpf = formatCpf(updatePerson.Cpf());
         cpf = cleanCpf(cpf);
         Person person = personRepository.findByCpf(cpf)
@@ -64,7 +67,8 @@ public class PersonService {
     }
 
    public void deletePerson (Long id){
-       Person person = personRepository.getById(id);
+       Person person = personRepository.findById(id)
+               .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada"));
        personRepository.delete(person);
    }
 

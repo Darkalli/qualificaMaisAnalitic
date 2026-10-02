@@ -8,6 +8,7 @@ import com.enums.StatusClass;
 import com.mappers.CourseClassMapper;
 import com.repositories.*;
 import jakarta.persistence.EntityNotFoundException;
+import com.exceptions.ConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +45,7 @@ public class CourseClassService {
         validateTimes(dto.day(), dto.session(), dto.start(), dto.finish());
         Course course = lockCourse(dto.course());
         if (courseClassRepository.existsByCourseAndDay(course, dto.day())) {
-            throw new IllegalArgumentException("O curso já possui uma aula registrada para este dia.");
+            throw new ConflictException("O curso já possui uma aula registrada para este dia.");
         }
         CourseClass courseClass = new CourseClass(dto.day(), dto.session(), dto.start(), dto.finish(), course, StatusClass.ACTIVE);
         validateRegistrations(courseClass);
@@ -62,12 +63,12 @@ public class CourseClassService {
         StatusClass status = dto.statusClass() != null ? dto.statusClass() : courseClass.getStatusClass();
         validateTimes(day, session, start, finish);
         if (courseClassRepository.existsByCourseAndDayAndIdNot(course, day, dto.classId())) {
-            throw new IllegalArgumentException("O curso já possui uma aula registrada para este dia.");
+            throw new ConflictException("O curso já possui uma aula registrada para este dia.");
         }
         boolean changedSchedule = !Objects.equals(course.getId(), courseClass.getCourse().getId())
                 || !day.equals(courseClass.getDay()) || !start.equals(courseClass.getStart()) || !finish.equals(courseClass.getFinish());
         if (changedSchedule && presenceRepository.existsByCourseClassId(dto.classId())) {
-            throw new IllegalArgumentException("Não é possível alterar curso, dia ou horários de uma aula com presenças registradas.");
+            throw new ConflictException("Não é possível alterar curso, dia ou horários de uma aula com presenças registradas.");
         }
         CourseClass changedClass = new CourseClass(day, session, start, finish, course, status);
         changedClass.setId(dto.classId());
@@ -108,6 +109,9 @@ public class CourseClassService {
     }
 
     private CourseClass lockClass(Long id, Course replacement) {
+        if (id == null) {
+            throw new IllegalArgumentException("O ID da aula é obrigatório.");
+        }
         Long currentCourseId = courseClassRepository.findCourseIdById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Turma não encontrada com o ID: " + id));
         if (replacement != null && replacement.getId() == null) {
@@ -119,7 +123,7 @@ public class CourseClassService {
         CourseClass courseClass = courseClassRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Turma não encontrada com o ID: " + id));
         if (!currentCourseId.equals(courseClass.getCourse().getId())) {
-            throw new IllegalArgumentException("O curso da aula foi alterado por outra operação. Tente novamente.");
+            throw new ConflictException("O curso da aula foi alterado por outra operação. Tente novamente.");
         }
         return courseClass;
     }
@@ -135,7 +139,7 @@ public class CourseClassService {
         }
         for (String cpf : cpfs) {
             if (hasScheduleConflict(registerRepository, cpf, courseClass)) {
-                throw new IllegalArgumentException("A aula causa conflito de horários para uma pessoa inscrita.");
+                throw new ConflictException("A aula causa conflito de horários para uma pessoa inscrita.");
             }
         }
     }

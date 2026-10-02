@@ -160,7 +160,7 @@ class PersonTests {
     @Test
     void deletesTheRequestedPerson() {
         var person = ServiceTestData.person();
-        when(repository.getById(Long.valueOf(7))).thenReturn(person);
+        when(repository.findById(7L)).thenReturn(Optional.of(person));
         service.deletePerson(7L);
         verify(repository).delete(person);
     }

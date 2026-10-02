@@ -10,6 +10,7 @@ import com.repositories.CourseRepository;
 import com.repositories.PersonRepository;
 import com.repositories.RegisterRepository;
 import jakarta.persistence.EntityNotFoundException;
+import com.exceptions.ConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,15 +34,19 @@ public class RegisterService {
 
     @Transactional
     public Register addRegister (AddRegisterDto dto){
+        validateKey(dto.personCpf(), dto.courseOfInterestId());
+        if (dto.registerDate() == null) {
+            throw new IllegalArgumentException("A data de inscrição é obrigatória.");
+        }
         String cpf = formatCpf(dto.personCpf());
         cpf = cleanCpf(cpf);
         Course course = courseRepository.findByIdForRegistration(dto.courseOfInterestId())
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o Id: " + dto.courseOfInterestId()));
         Person person = personRepository.findByCpfForUpdate(cpf)
-                .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada com o cpf: " + dto.personCpf()));
+                .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada"));
         Register newRegister = new Register(person, course, dto.registerDate());
         if (hasScheduleConflict(registerRepository, newRegister)) {
-            throw new IllegalArgumentException("Não é possivel se inscrever em cursos com mesmos horarios");
+            throw new ConflictException("Não é possivel se inscrever em cursos com mesmos horarios");
         }else {
             return registerRepository.save(newRegister);
         }
@@ -49,6 +54,7 @@ public class RegisterService {
 
     @Transactional
     public void deleteRegister (SearchRegisterDto dto){
+        validateKey(dto.personCpf(), dto.courseOfInterestId());
         String cpf = formatCpf(dto.personCpf());
         cpf = cleanCpf(cpf);
         registerRepository.delete(registerRepository.findByPerson_CpfAndCourseOfInterest_Id(cpf, dto.courseOfInterestId())
@@ -62,9 +68,15 @@ public class RegisterService {
     }
 
     public Register getByPersonCpfAndCourseOfInterest (SearchRegisterDto dto){
+        validateKey(dto.personCpf(), dto.courseOfInterestId());
         String cpf = formatCpf(dto.personCpf());
         cpf = cleanCpf(cpf);
         return registerRepository.findByPerson_CpfAndCourseOfInterest_Id(cpf, dto.courseOfInterestId())
                 .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados."));
+    }
+    private void validateKey(String cpf, Long courseId) {
+        if (cpf == null || courseId == null) {
+            throw new IllegalArgumentException("CPF e curso são obrigatórios.");
+        }
     }
 }
