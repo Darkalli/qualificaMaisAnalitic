@@ -203,7 +203,7 @@ class ConcurrentClassAndBatchTests {
     }
 
     private CourseClass add(Course course, LocalDate day, int start, int finish) {
-        return classService.addCourseClass(new AddCourseClassDto(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course));
+        return classService.addCourseClass(new AddCourseClassDto(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course.getId()));
     }
 
     private int count(String table) { return jdbc.queryForObject("select count(*) from " + table, Integer.class); }

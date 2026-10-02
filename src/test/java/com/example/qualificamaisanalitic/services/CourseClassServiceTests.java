@@ -48,7 +48,8 @@ class CourseClassServiceTests {
     void createsClassWithCourseDaySessionAndTimes() {
         var course = course(3L);
         course.setId(3L);
-        service.addCourseClass(new AddCourseClassDto(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course));
+        when(courses.findByid(3L)).thenReturn(Optional.of(course));
+        service.addCourseClass(new AddCourseClassDto(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
         var capture = ArgumentCaptor.forClass(CourseClass.class);
         verify(classes).save(capture.capture());
         var saved = capture.getValue();
@@ -123,10 +124,11 @@ class CourseClassServiceTests {
     void refusesSecondClassOnSameCourseAndDayEvenWithDifferentSessionAndTimes() {
         var course = course(3L);
         course.setId(3L);
+        when(courses.findByid(3L)).thenReturn(Optional.of(course));
         when(classes.existsByCourseAndDay(course, DAY)).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> service.addCourseClass(
-                new AddCourseClassDto(DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), course)));
+                new AddCourseClassDto(DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), course.getId())));
 
         verify(classes, never()).save(any());
     }

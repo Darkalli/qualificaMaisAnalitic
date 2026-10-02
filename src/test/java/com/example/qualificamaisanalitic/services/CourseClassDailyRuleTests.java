@@ -37,7 +37,7 @@ class CourseClassDailyRuleTests {
         flushAndClear();
 
         assertThrows(IllegalArgumentException.class, () -> classes.addCourseClass(
-                new AddCourseClassDto(DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), first)));
+                new AddCourseClassDto(DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), first.getId())));
         addClass(second, DAY);
         addClass(first, DAY.plusDays(1));
         flushAndClear();
@@ -134,7 +134,7 @@ class CourseClassDailyRuleTests {
     }
 
     private CourseClass addClass(Course course, LocalDate day) {
-        return classes.addCourseClass(new AddCourseClassDto(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course));
+        return classes.addCourseClass(new AddCourseClassDto(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
     }
 
     private void flushAndClear() {

@@ -52,7 +52,7 @@ class ServicesPersistenceTests {
     void createsUpdatesQueriesAndDeletesCourseAndClassThroughServices() {
         courses.addCourse(new AddCourseDto("Curso de teste", "Descrição", DAY, DAY.plusMonths(1)));
         var course = courses.getCourseByName("Curso de teste");
-        classes.addCourseClass(new AddCourseClassDto(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course));
+        classes.addCourseClass(new AddCourseClassDto(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
         entityManager.flush();
         entityManager.clear();
         var courseClass = classes.allClassesByCourseId(course.getId()).getFirst();

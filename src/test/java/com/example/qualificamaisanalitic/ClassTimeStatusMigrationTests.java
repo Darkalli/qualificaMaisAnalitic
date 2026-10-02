@@ -63,5 +63,5 @@ class ClassTimeStatusMigrationTests {
         assertEquals(Time.valueOf("08:00:00"), jdbc.queryForObject("select start from " + prefix + "course_class", Time.class));
     }
 
-    private Flyway latest() { return Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).load(); }
+    private Flyway latest() { return Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).target("3").load(); }
 }

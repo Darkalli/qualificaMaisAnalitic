@@ -111,7 +111,7 @@ class ClassScheduleLifecycleTests {
         LocalTime start = value.equals("missing") ? null : LocalTime.of(10, 0);
         LocalTime finish = LocalTime.of(value.equals("inverted") ? 8 : 10, 0);
         assertThrows(IllegalArgumentException.class, () -> service.addCourseClass(
-                new AddCourseClassDto(DAY, "Sessão", start, finish, first)));
+                new AddCourseClassDto(DAY, "Sessão", start, finish, first.getId())));
         assertEquals(0, classes.count());
     }
 
@@ -182,7 +182,7 @@ class ClassScheduleLifecycleTests {
     }
 
     private CourseClass add(Course course, LocalDate day, int start, int finish) {
-        return service.addCourseClass(new AddCourseClassDto(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course));
+        return service.addCourseClass(new AddCourseClassDto(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course.getId()));
     }
 
     private void changeStatus(CourseClass courseClass, StatusClass status) {

@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
 /** Requisições MVC reais, com serviços, JSON e banco de testes; sem porta HTTP ou transação do teste. */
 @SpringBootTest
@@ -31,7 +33,8 @@ class ApiControllerTests {
     @BeforeEach
     void setUp() {
         clearTestDatabase();
-        mvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity())
+                .defaultRequest(get("/").with(user("api-tests").roles("AGENT"))).build();
     }
 
     @AfterEach
@@ -428,7 +431,7 @@ class ApiControllerTests {
                         .content("{\"classId\":%d,\"finish\":\"08:00:00\"}".formatted(classId)))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
         mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
-                {"day":"2026-10-01","session":"Tarde","start":"14:00:00","finish":"16:00:00","course":{"id":%d}}
+                {"day":"2026-10-01","session":"Tarde","start":"14:00:00","finish":"16:00:00","courseId":%d}
                 """.formatted(courseId)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409));
         assertEquals(1, jdbc.queryForObject("select count(*) from course_class", Integer.class));
@@ -474,6 +477,29 @@ class ApiControllerTests {
                 .andExpect(status().isUnsupportedMediaType()).andExpect(jsonPath("$.status").value(415));
     }
 
+    @Test
+    void classCreationDistinguishesMissingAndUnknownCourseId() throws Exception {
+        String body = """
+                {"day":"2026-10-02","session":"Tarde","start":"10:00:00","finish":"14:00:00"%s}
+                """;
+        mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content(body.formatted("")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("O ID do curso é obrigatório."));
+        mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON)
+                        .content(body.formatted(",\"courseId\":-1")))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.message").value("Curso não encontrado com o ID: -1"));
+        assertEquals(0, jdbc.queryForObject("select count(*) from course_class", Integer.class));
+    }
+
+    @Test
+    void swaggerDescribesTheCurrentClassCreationContractAndServesItsUi() throws Exception {
+        mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.schemas.AddCourseClassDto.properties.courseId.type").value("integer"))
+                .andExpect(jsonPath("$.components.schemas.AddCourseClassDto.properties.course").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.AddCourseClassDto.properties.start.type").value("string"))
+                .andExpect(jsonPath("$.components.schemas.AddCourseClassDto.properties.finish.type").value("string"));
+        mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
+    }
+
     private String registrationKey(String cpf, long courseId) {
         return "{\"personCpf\":\"%s\",\"courseOfInterestId\":%d}".formatted(cpf, courseId);
     }
@@ -492,7 +518,7 @@ class ApiControllerTests {
     private ResultActions createClass(long courseId, int start, int finish) throws Exception {
         return mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
                 {"day":"2026-10-01","session":"Sessão","start":"%02d:00:00",
-                 "finish":"%02d:00:00","course":{"id":%d}}
+                 "finish":"%02d:00:00","courseId":%d}
                 """.formatted(start, finish, courseId))).andExpect(status().isCreated());
     }
 
@@ -520,7 +546,7 @@ class ApiControllerTests {
     private ResultActions createClass(long courseId) throws Exception {
         return mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
                 {"day":"2026-10-01","session":"Manhã","start":"08:00:00",
-                 "finish":"10:00:00","course":{"id":%d}}
+                 "finish":"10:00:00","courseId":%d}
                 """.formatted(courseId))).andExpect(status().isCreated());
     }
 

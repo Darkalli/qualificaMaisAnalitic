@@ -43,7 +43,12 @@ public class CourseClassService {
     @Transactional
     public CourseClass addCourseClass(AddCourseClassDto dto) {
         validateTimes(dto.day(), dto.session(), dto.start(), dto.finish());
-        Course course = lockCourse(dto.course());
+        if (dto.courseId() == null) {
+            throw new IllegalArgumentException("O ID do curso é obrigatório.");
+        }
+        Course course2 = courseRepository.findByid(dto.courseId())
+                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o ID: " + dto.courseId()));
+        Course course = lockCourse(course2);
         if (courseClassRepository.existsByCourseAndDay(course, dto.day())) {
             throw new ConflictException("O curso já possui uma aula registrada para este dia.");
         }

@@ -7,6 +7,11 @@ spring.datasource.password=${DB_PASSWORD:}
 spring.jpa.hibernate.ddl-auto=validate
 spring.flyway.clean-disabled=true
 
+# Primeiro usuário: preencher apenas na primeira inicialização e remover depois.
+# Só cria quando app_user estiver vazia; nunca redefine uma conta existente.
+app.auth.bootstrap.username=${AUTH_BOOTSTRAP_USERNAME:}
+app.auth.bootstrap.password=${AUTH_BOOTSTRAP_PASSWORD:}
+
 app.sheets.spreadsheet-id=${GOOGLE_SHEETS_SPREADSHEET_ID:}
 app.sheets.range=${GOOGLE_SHEETS_RANGE:}
 app.sheets.header-row=1
