@@ -124,7 +124,27 @@ O serviço de inscrição normaliza CPF nas quatro operações, aceitando másca
 
 As respostas usam as entidades JPA diretamente. Um curso inclui `courseClass`; cada turma inclui seu curso, mas esse curso aninhado omite `courseClass` para evitar recursão no JSON. Ainda não há DTOs específicos de saída nem paginação.
 
-JSON malformado, corpo obrigatório ausente e ID de caminho com formato inválido retornam 400; método HTTP não suportado retorna 405. Ainda não há tratamento global que traduza pessoa/curso inexistente, CPF inválido ou conflito no banco em respostas de negócio padronizadas, como 404/409. Também não há validação completa de campos com Bean Validation. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
+`ApiExceptionHandler` centraliza os erros com `@RestControllerAdvice`; `ApiErrorDto` define o corpo com `status` e `message`. Os serviços usam `EntityNotFoundException` para ausência de registro, `IllegalArgumentException` para entradas inválidas e `ConflictException` para conflitos de negócio. As regras continuam nos serviços.
+
+| HTTP | Situação |
+| --- | --- |
+| 400 | JSON/corpo inválido, CPF/telefone inválido, identificador obrigatório ausente, horários inválidos ou campo obrigatório nulo. |
+| 404 | Registro solicitado não encontrado, inclusive exclusão de pessoa/curso inexistentes, ou rota inexistente. Listagens vazias continuam retornando 200. |
+| 409 | Duplicidade, conflito de horários, presença sem inscrição/em aula inativa, alteração de aula com presenças, vínculos que impedem exclusão ou disputa por bloqueio. Busca singular com vários resultados também retorna 409. |
+| 405 / 415 | Método HTTP não permitido / tipo de conteúdo não suportado. |
+| 500 | Falha inesperada, com mensagem genérica para o cliente e diagnóstico no log do servidor. |
+
+Exemplo de presença sem inscrição:
+
+```json
+{"status":409,"message":"A pessoa não possui inscrição no curso desta aula."}
+```
+
+Erros de integridade conhecidos do banco são traduzidos sem expor SQL, valores dos registros ou stack trace na resposta. NOT NULL/CHECK e valores fora do formato/tamanho retornam 400; unicidade e chaves estrangeiras retornam 409. Falha de integridade não reconhecida retorna 500. Os cabeçalhos HTTP do Spring são preservados, inclusive `Allow` no 405. O tratamento dos erros MVC segue a extensão de [ResponseEntityExceptionHandler](https://docs.spring.io/spring-framework/docs/7.0.4/javadoc-api/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandler.html).
+
+Para conferir sem cadastrar dados, execute `GET /api/person/person/123`: a resposta esperada é `400` com `{"status":400,"message":"CPF deve conter 11 dígitos."}`. A suíte `ApiControllerTests` verifica as respostas com serviços e banco; `ApiExceptionHandlerTests` simula falhas inesperadas e de bloqueio.
+
+Ainda não há validação completa dos campos com Bean Validation. As obrigatoriedades existentes foram preservadas; não foram acrescentadas regras de e-mail, dígitos verificadores de CPF ou novas exigências para cursos. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
 
 Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. A inscrição direta e a importação compartilham a checagem de horários. Presença exige inscrição no curso da aula; a unicidade pessoa/aula é garantida pela V1.
 
@@ -308,11 +328,11 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 .\mvnw.cmd test
 ```
 
-O perfil `test` usa dados fictícios, H2 em memória, Flyway e validação de schema; coleta Google desabilitada. Não acessa o banco de trabalho. Resultado de 02/10/2026: **289 testes aprovados em H2 e PostgreSQL 18.6 isolado**, sem falhas, erros ou ignorados. Logs: `target/class-flow-h2-tests.log` e `target/class-flow-postgres-tests.log`.
+O perfil `test` usa dados fictícios, H2 em memória, Flyway e validação de schema; coleta Google desabilitada. Não acessa o banco de trabalho. Resultado de 02/10/2026: **312 testes aprovados em H2 e PostgreSQL 18.6 isolado**, sem falhas, erros ou ignorados. Logs: `target/api-errors-h2-tests.log` e `target/api-errors-postgres-tests.log`.
 
 | Área | Cobertura |
 | --- | --- |
-| API e serviços | 20 casos MockMvc para os 22 endpoints; cadastro, consulta, PATCH, cancelamento, status, presença com inscrição, JSON e erros de formato. Erros de negócio ainda não têm contrato global 404/409. |
+| API e serviços | 37 casos em `ApiControllerTests` para os 22 endpoints e 6 em `ApiExceptionHandlerTests`; sucesso, erros 400/404/405/409/415/500, dados obrigatórios, histórico e rollback. |
 | Importação | Reimportação, divergências, dados preservados, horários por ID de curso, conflitos existentes/entre linhas e rollback do lote, endereço e deficiências. |
 | Regras de aula | `ClassScheduleLifecycleTests`: 15 casos de criação após inscrição, reagendamento, validação de horários, cancelamento/adiamento, reativação e proteção de presenças. |
 | Concorrência | Unicidade de pessoa/curso, pessoa/aula e curso/dia; 11 casos de inscrição API/Sheets e 12 casos de lotes em ordem inversa, mudanças de aula versus inscrição e cancelamento versus presença. |
