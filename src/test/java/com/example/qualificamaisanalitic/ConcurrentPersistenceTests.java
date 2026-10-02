@@ -16,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
@@ -41,7 +42,7 @@ class ConcurrentPersistenceTests {
         var day = LocalDate.of(2026, 10, 1);
         var person = PersonTestData.person("10987654321");
         var course = new Course("Curso de concorrência", null, day, day.plusDays(1));
-        var courseClass = new CourseClass(day, "Manhã", day.atTime(8, 0), day.atTime(10, 0), course);
+        var courseClass = new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         transactions.executeWithoutResult(status -> {
             people.saveAndFlush(person);
             courses.saveAndFlush(course);
@@ -63,7 +64,7 @@ class ConcurrentPersistenceTests {
                         } else if (table.equals("presence")) {
                             presences.saveAndFlush(new Presence(person, courseClass, course, PresenceStatus.PRESENT));
                         } else {
-                            classes.saveAndFlush(new CourseClass(day, "Manhã", day.atTime(8, 0), day.atTime(10, 0), course));
+                            classes.saveAndFlush(new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course));
                         }
                     });
                     return true;

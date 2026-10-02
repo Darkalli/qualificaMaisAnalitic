@@ -4,6 +4,7 @@ import com.sheets.RegisterImportResult;
 import com.sheets.SheetImportResult;
 import com.entities.Register;
 import com.entities.Person;
+import com.entities.Course;
 import com.repositories.CourseRepository;
 import jakarta.persistence.EntityNotFoundException;
 import com.repositories.PersonRepository;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.TreeMap;
 
 import static com.utils.RegisterUtils.hasScheduleConflict;
 
@@ -35,6 +37,8 @@ public class RegisterPersistenceService {
         int inserted = 0;
         int unchanged = 0;
         var conflicts = new ArrayList<RegisterImportResult.Conflict>();
+        var incomingPeople = new TreeMap<String, Person>();
+        var savedCourses = new TreeMap<Long, Course>();
         for (Register incoming : collection.registers()) {
             Person incomingPerson = incoming.getPerson();
             if (incomingPerson == null || incomingPerson.getCpf() == null
@@ -49,10 +53,24 @@ public class RegisterPersistenceService {
                     || incoming.getCourseOfInterest().getId() <= 0) {
                 throw new IllegalArgumentException("A importação requer o ID positivo de um curso cadastrado.");
             }
-            var savedCourse = courses.findById(incoming.getCourseOfInterest().getId())
-                    .orElseThrow(() -> new EntityNotFoundException("Curso informado na importação não encontrado."));
-            Person savedPerson = people.findByCpf(incomingPerson.getCpf())
-                    .orElseGet(() -> people.save(incomingPerson));
+            incomingPeople.putIfAbsent(incomingPerson.getCpf(), incomingPerson);
+            savedCourses.put(incoming.getCourseOfInterest().getId(), null);
+        }
+        // Bloquear todo o lote na mesma ordem, mesmo quando as linhas chegam invertidas.
+        for (Long courseId : savedCourses.keySet()) {
+            savedCourses.put(courseId, courses.findByIdForRegistration(courseId)
+                    .orElseThrow(() -> new EntityNotFoundException("Curso informado na importação não encontrado.")));
+        }
+        var savedPeople = new TreeMap<String, Person>();
+        for (var entry : incomingPeople.entrySet()) {
+            savedPeople.put(entry.getKey(), people.findByCpfForUpdate(entry.getKey())
+                    .orElseGet(() -> people.save(entry.getValue())));
+        }
+        // Preservar a ordem original e a precedência da primeira ocorrência no relatório.
+        for (Register incoming : collection.registers()) {
+            Person incomingPerson = incoming.getPerson();
+            Course savedCourse = savedCourses.get(incoming.getCourseOfInterest().getId());
+            Person savedPerson = savedPeople.get(incomingPerson.getCpf());
             var fields = differences(savedPerson, incomingPerson);
             var existing = repository.findByPerson_CpfAndCourseOfInterest_Id(
                     savedPerson.getCpf(), savedCourse.getId());

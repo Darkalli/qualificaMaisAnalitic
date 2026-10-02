@@ -115,7 +115,8 @@ class ApiControllerTests {
         mvc.perform(get("/api/course")).andExpect(status().isOk());
         mvc.perform(delete("/api/courseClass/courseClass/{id}", classId)).andExpect(status().isNoContent());
         mvc.perform(get("/api/courseClass/courseClass/{courseId}", courseId))
-                .andExpect(status().isOk()).andExpect(content().json("[]"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(classId))
+                .andExpect(jsonPath("$[0].statusClass").value("CANCELED"));
     }
 
     @Test
@@ -124,7 +125,9 @@ class ApiControllerTests {
         long courseId = id(createCourse("Curso A"));
         long otherCourseId = id(createCourse("Curso B"));
         long classId = id(createClass(courseId));
-        long otherClassId = id(createClass(otherCourseId));
+        long otherClassId = id(createClass(otherCourseId, 14, 16));
+        createRegistration("01234567890", courseId);
+        createRegistration("01234567890", otherCourseId);
         for (long[] selected : new long[][]{{classId, courseId}, {otherClassId, otherCourseId}}) {
             mvc.perform(post("/api/presence").contentType(APPLICATION_JSON).content("""
                     {"personId":%d,"courseClassId":%d,"status":"PRESENT"}
@@ -150,6 +153,56 @@ class ApiControllerTests {
         mvc.perform(get("/api/presence").contentType(APPLICATION_JSON)
                         .content("{\"courseId\":" + courseId + ",\"courseClassId\":" + otherClassId + "}"))
                 .andExpect(status().isOk()).andExpect(content().json("[]"));
+    }
+
+    @Test
+    void classStatusPatchSupportsPostponingReschedulingAndReactivation() throws Exception {
+        long courseId = id(createCourse("Curso A"));
+        long classId = id(createClass(courseId).andExpect(jsonPath("$.statusClass").value("ACTIVE")));
+        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON)
+                        .content("{\"classId\":" + classId + ",\"statusClass\":\"POSTPONED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statusClass").value("POSTPONED"));
+        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON).content("""
+                {"classId":%d,"day":"2026-10-02","start":"14:00:00","finish":"16:00:00","statusClass":"ACTIVE"}
+                """.formatted(classId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.day").value("2026-10-02"))
+                .andExpect(jsonPath("$.statusClass").value("ACTIVE"));
+        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON)
+                        .content("{\"classId\":" + classId + ",\"statusClass\":\"INVALID\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void attendanceRequiresThePersonsRegistrationInTheClassCourseAndRejectsDuplicates() throws Exception {
+        long personId = id(createPerson("01234567890", "Pessoa Exemplo"));
+        createPerson("98765432100", "Outra Pessoa");
+        long courseId = id(createCourse("Curso da aula"));
+        long otherCourseId = id(createCourse("Outro curso"));
+        long classId = id(createClass(courseId));
+        String body = """
+                {"personId":%d,"courseClassId":%d,"status":"PRESENT"}
+                """.formatted(personId, classId);
+
+        for (boolean unrelatedRegistrations : new boolean[]{false, true}) {
+            if (unrelatedRegistrations) {
+                createRegistration("01234567890", otherCourseId);
+                createRegistration("98765432100", courseId);
+            }
+            var error = assertThrows(ServletException.class, () -> mvc.perform(post("/api/presence")
+                    .contentType(APPLICATION_JSON).content(body)));
+            assertInstanceOf(IllegalArgumentException.class, error.getCause());
+            assertEquals("A pessoa não possui inscrição no curso desta aula.", error.getCause().getMessage());
+            assertEquals(0, jdbc.queryForObject("select count(*) from presence", Integer.class));
+        }
+
+        createRegistration("01234567890", courseId);
+        mvc.perform(post("/api/presence").contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+        var duplicate = assertThrows(ServletException.class, () -> mvc.perform(post("/api/presence")
+                .contentType(APPLICATION_JSON).content(body)));
+        assertInstanceOf(IllegalArgumentException.class, duplicate.getCause());
+        assertTrue(duplicate.getCause().getMessage().contains("já possui uma presença"));
+        assertEquals(1, jdbc.queryForObject("select count(*) from presence", Integer.class));
     }
 
     @ParameterizedTest
@@ -328,8 +381,8 @@ class ApiControllerTests {
 
     private ResultActions createClass(long courseId, int start, int finish) throws Exception {
         return mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
-                {"day":"2026-10-01","session":"Sessão","start":"2026-10-01T%02d:00:00",
-                 "finish":"2026-10-01T%02d:00:00","course":{"id":%d}}
+                {"day":"2026-10-01","session":"Sessão","start":"%02d:00:00",
+                 "finish":"%02d:00:00","course":{"id":%d}}
                 """.formatted(start, finish, courseId))).andExpect(status().isCreated());
     }
 
@@ -351,8 +404,8 @@ class ApiControllerTests {
 
     private ResultActions createClass(long courseId) throws Exception {
         return mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
-                {"day":"2026-10-01","session":"Manhã","start":"2026-10-01T08:00:00",
-                 "finish":"2026-10-01T10:00:00","course":{"id":%d}}
+                {"day":"2026-10-01","session":"Manhã","start":"08:00:00",
+                 "finish":"10:00:00","course":{"id":%d}}
                 """.formatted(courseId))).andExpect(status().isCreated());
     }
 

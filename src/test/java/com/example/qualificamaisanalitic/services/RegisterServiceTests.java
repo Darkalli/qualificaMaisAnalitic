@@ -21,6 +21,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,8 +46,8 @@ class RegisterServiceTests {
     void newRegistrationReusesPersonWithoutResavingPersonalData() {
         var person = ServiceTestData.person();
         var course = course(3L);
-        when(people.findByCpf(CPF)).thenReturn(Optional.of(person));
-        when(courses.findById(3L)).thenReturn(Optional.of(course));
+        when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
+        when(courses.findByIdForRegistration(3L)).thenReturn(Optional.of(course));
         service.addRegister(new AddRegisterDto(CPF, 3L, DAY));
         var capture = ArgumentCaptor.forClass(Register.class);
         verify(registers).save(capture.capture());
@@ -61,8 +62,8 @@ class RegisterServiceTests {
 
     @Test
     void refusesRegistrationOfUnknownPerson() {
-        when(courses.findById(3L)).thenReturn(Optional.of(course(3L)));
-        when(people.findByCpf(CPF)).thenReturn(Optional.empty());
+        when(courses.findByIdForRegistration(3L)).thenReturn(Optional.of(course(3L)));
+        when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.empty());
         assertThrows(EntityNotFoundException.class,
                 () -> service.addRegister(new AddRegisterDto(CPF, 3L, DAY)));
         verifyNoInteractions(registers);
@@ -99,7 +100,7 @@ class RegisterServiceTests {
 
     @Test
     void refusesUnknownCourseBeforeSavingRegistration() {
-        when(courses.findById(99L)).thenReturn(Optional.empty());
+        when(courses.findByIdForRegistration(99L)).thenReturn(Optional.empty());
         assertThrows(EntityNotFoundException.class, () -> service.addRegister(new AddRegisterDto(CPF, 99L, DAY)));
         verifyNoInteractions(people, registers);
     }
@@ -116,8 +117,8 @@ class RegisterServiceTests {
         var person = ServiceTestData.person();
         var course = course(3L);
         var registration = new Register(person, course, DAY);
-        when(people.findByCpf(CPF)).thenReturn(Optional.of(person));
-        when(courses.findById(3L)).thenReturn(Optional.of(course));
+        when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
+        when(courses.findByIdForRegistration(3L)).thenReturn(Optional.of(course));
         when(registers.save(any(Register.class))).thenReturn(registration);
         when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(registration));
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L))
@@ -129,7 +130,7 @@ class RegisterServiceTests {
         assertSame(registration, service.getByPersonCpfAndCourseOfInterest(key));
         service.deleteRegister(key);
 
-        verify(people).findByCpf(CPF);
+        verify(people).findByCpfForUpdate(CPF);
         verify(registers, times(2)).findByPerson_Cpf(CPF);
         verify(registers, times(2)).findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L);
         verify(registers).delete(registration);
@@ -164,8 +165,8 @@ class RegisterServiceTests {
         var requested = course(4L);
         addClass(existing, DAY, 8, 10);
         addClass(requested, DAY.plusDays(dayOffset), start, finish);
-        when(people.findByCpf(CPF)).thenReturn(Optional.of(person));
-        when(courses.findById(4L)).thenReturn(Optional.of(requested));
+        when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
+        when(courses.findByIdForRegistration(4L)).thenReturn(Optional.of(requested));
         when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(new Register(person, existing, DAY)));
         var input = new AddRegisterDto("012.345.678-90", 4L, DAY);
 
@@ -187,8 +188,8 @@ class RegisterServiceTests {
         var requested = course(4L);
         if (existingHasClass) addClass(existing, DAY, 8, 10);
         if (requestedHasClass) addClass(requested, DAY, 8, 10);
-        when(people.findByCpf(CPF)).thenReturn(Optional.of(person));
-        when(courses.findById(4L)).thenReturn(Optional.of(requested));
+        when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
+        when(courses.findByIdForRegistration(4L)).thenReturn(Optional.of(requested));
         when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(new Register(person, existing, DAY)));
 
         service.addRegister(new AddRegisterDto(CPF, 4L, DAY));
@@ -207,8 +208,8 @@ class RegisterServiceTests {
         addClass(existing, DAY.plusDays(1), 14, 16);
         addClass(requested, DAY, 10, 12);
         addClass(requested, DAY.plusDays(1), 15, 17);
-        when(people.findByCpf(CPF)).thenReturn(Optional.of(person));
-        when(courses.findById(4L)).thenReturn(Optional.of(requested));
+        when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
+        when(courses.findByIdForRegistration(4L)).thenReturn(Optional.of(requested));
         when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(
                 new Register(person, unrelated, DAY), new Register(person, existing, DAY)));
 
@@ -218,6 +219,6 @@ class RegisterServiceTests {
     }
 
     private void addClass(Course course, LocalDate day, int start, int finish) {
-        course.getCourseClass().add(new CourseClass(day, "Sessão", day.atTime(start, 0), day.atTime(finish, 0), course));
+        course.getCourseClass().add(new CourseClass(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course));
     }
 }

@@ -23,6 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -208,7 +209,7 @@ class RegisterScheduleImportTests {
     }
 
     private void addClass(Course course, LocalDate day, int start, int finish) {
-        classes.saveAndFlush(new CourseClass(day, "Sessão", day.atTime(start, 0), day.atTime(finish, 0), course));
+        classes.saveAndFlush(new CourseClass(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course));
     }
 
     private Register incoming(String cpf, Course course) {

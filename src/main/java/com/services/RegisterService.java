@@ -35,9 +35,9 @@ public class RegisterService {
     public Register addRegister (AddRegisterDto dto){
         String cpf = formatCpf(dto.personCpf());
         cpf = cleanCpf(cpf);
-        Course course = courseRepository.findById(dto.courseOfInterestId())
+        Course course = courseRepository.findByIdForRegistration(dto.courseOfInterestId())
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o Id: " + dto.courseOfInterestId()));
-        Person person = personRepository.findByCpf(cpf)
+        Person person = personRepository.findByCpfForUpdate(cpf)
                 .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada com o cpf: " + dto.personCpf()));
         Register newRegister = new Register(person, course, dto.registerDate());
         if (hasScheduleConflict(registerRepository, newRegister)) {

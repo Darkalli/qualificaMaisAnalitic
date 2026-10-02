@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -32,9 +33,9 @@ class CoursePresencePersistenceTests {
         var otherCourse = new Course("Inglês", null, day, day.plusMonths(1));
         entityManager.persist(course);
         entityManager.persist(otherCourse);
-        var courseClass = new CourseClass(day, "Manhã", day.atTime(8, 0), day.atTime(10, 0), course);
+        var courseClass = new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         entityManager.persist(courseClass);
-        var otherClass = new CourseClass(day, "Tarde", day.atTime(14, 0), day.atTime(16, 0), otherCourse);
+        var otherClass = new CourseClass(day, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), otherCourse);
         entityManager.persist(otherClass);
         var attendance = new Presence(person, courseClass, course, PresenceStatus.PRESENT);
         var otherAttendance = new Presence(person, otherClass, otherCourse, PresenceStatus.ABSENT);
@@ -53,8 +54,8 @@ class CoursePresencePersistenceTests {
         var savedClass = savedCourse.getCourseClass().getFirst();
         assertEquals(courseClass.getId(), savedClass.getId());
         assertEquals(day, savedClass.getDay());
-        assertEquals(day.atTime(8, 0), savedClass.getStart());
-        assertEquals(day.atTime(10, 0), savedClass.getFinish());
+        assertEquals(LocalTime.of(8, 0), savedClass.getStart());
+        assertEquals(LocalTime.of(10, 0), savedClass.getFinish());
 
         var savedAttendance = entityManager.find(Presence.class, attendance.getId());
         assertEquals(attendance.getId(), savedAttendance.getId());
@@ -84,7 +85,7 @@ class CoursePresencePersistenceTests {
         var course = new Course("Informática", null, day, day.plusMonths(1));
         entityManager.persist(person);
         entityManager.persist(course);
-        var courseClass = new CourseClass(day, "Manhã", day.atTime(8, 0), day.atTime(10, 0), course);
+        var courseClass = new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         entityManager.persist(courseClass);
         presences.saveAndFlush(new Presence(person, courseClass, course, PresenceStatus.PRESENT));
         var otherPerson = PersonTestData.person("12345678901");

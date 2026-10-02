@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -51,13 +52,13 @@ class ServicesPersistenceTests {
     void createsUpdatesQueriesAndDeletesCourseAndClassThroughServices() {
         courses.addCourse(new AddCourseDto("Curso de teste", "Descrição", DAY, DAY.plusMonths(1)));
         var course = courses.getCourseByName("Curso de teste");
-        classes.addCourseClass(new AddCourseClassDto(DAY, "Manhã", DAY.atTime(8, 0), DAY.atTime(10, 0), course));
+        classes.addCourseClass(new AddCourseClassDto(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course));
         entityManager.flush();
         entityManager.clear();
         var courseClass = classes.allClassesByCourseId(course.getId()).getFirst();
         courses.updateCourse(new UpdateCourseDto(course.getId(), "Curso atualizado", null, null, null));
         classes.updateCourseClass(new UpdateCourseClassDto(courseClass.getId(), null, "Tarde",
-                DAY.atTime(14, 0), DAY.atTime(16, 0), null));
+                LocalTime.of(14, 0), LocalTime.of(16, 0), null));
         entityManager.flush();
         entityManager.clear();
         var savedCourse = courses.getCourseByName("Curso atualizado");
@@ -67,16 +68,13 @@ class ServicesPersistenceTests {
         var savedClass = savedCourse.getCourseClass().getFirst();
         assertEquals(courseClass.getId(), savedClass.getId());
         assertEquals("Tarde", savedClass.getSession());
-        assertEquals(DAY.atTime(14, 0), savedClass.getStart());
-        assertEquals(DAY.atTime(16, 0), savedClass.getFinish());
+        assertEquals(LocalTime.of(14, 0), savedClass.getStart());
+        assertEquals(LocalTime.of(16, 0), savedClass.getFinish());
         classes.deleteCourseClass(savedClass.getId());
         entityManager.flush();
         entityManager.clear();
-        assertNull(entityManager.find(CourseClass.class, courseClass.getId()));
-        courses.deleteCourse(course.getId());
-        entityManager.flush();
-        entityManager.clear();
-        assertThrows(EntityNotFoundException.class, () -> courses.getCourseByName("Curso atualizado"));
+        assertEquals(com.enums.StatusClass.CANCELED, entityManager.find(CourseClass.class, courseClass.getId()).getStatusClass());
+        assertEquals(course.getId(), courses.getCourseByName("Curso atualizado").getId());
     }
 
     @Test
@@ -147,10 +145,12 @@ class ServicesPersistenceTests {
         entityManager.persist(person);
         entityManager.persist(firstCourse);
         entityManager.persist(secondCourse);
-        var firstClass = new CourseClass(DAY, "Manhã", DAY.atTime(8, 0), DAY.atTime(10, 0), firstCourse);
-        var secondClass = new CourseClass(DAY, "Tarde", DAY.atTime(14, 0), DAY.atTime(16, 0), secondCourse);
+        var firstClass = new CourseClass(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), firstCourse);
+        var secondClass = new CourseClass(DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), secondCourse);
         entityManager.persist(firstClass);
         entityManager.persist(secondClass);
+        registers.addRegister(new AddRegisterDto(person.getCpf(), firstCourse.getId(), DAY));
+        registers.addRegister(new AddRegisterDto(person.getCpf(), secondCourse.getId(), DAY));
         presences.addPresence(new AddPresenceDto(person.getId(), firstClass.getId(), PresenceStatus.PRESENT));
         presences.addPresence(new AddPresenceDto(person.getId(), secondClass.getId(), PresenceStatus.ABSENT));
         entityManager.flush();

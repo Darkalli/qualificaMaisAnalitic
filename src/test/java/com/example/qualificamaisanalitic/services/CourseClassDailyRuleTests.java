@@ -15,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -36,7 +37,7 @@ class CourseClassDailyRuleTests {
         flushAndClear();
 
         assertThrows(IllegalArgumentException.class, () -> classes.addCourseClass(
-                new AddCourseClassDto(DAY, "Tarde", DAY.atTime(14, 0), DAY.atTime(16, 0), first)));
+                new AddCourseClassDto(DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), first)));
         addClass(second, DAY);
         addClass(first, DAY.plusDays(1));
         flushAndClear();
@@ -52,12 +53,12 @@ class CourseClassDailyRuleTests {
         flushAndClear();
 
         classes.updateCourseClass(new UpdateCourseClassDto(original.getId(), DAY, "Tarde",
-                DAY.atTime(14, 0), DAY.atTime(16, 0), course));
+                LocalTime.of(14, 0), LocalTime.of(16, 0), course));
         flushAndClear();
 
         var saved = entityManager.find(CourseClass.class, original.getId());
         assertEquals("Tarde", saved.getSession());
-        assertEquals(DAY.atTime(14, 0), saved.getStart());
+        assertEquals(LocalTime.of(14, 0), saved.getStart());
         assertEquals(1, classes.allClassesByCourseId(course.getId()).size());
     }
 
@@ -69,7 +70,7 @@ class CourseClassDailyRuleTests {
         var tomorrow = DAY.plusDays(1);
 
         classes.updateCourseClass(new UpdateCourseClassDto(original.getId(), tomorrow, null,
-                tomorrow.atTime(8, 0), tomorrow.atTime(10, 0), null));
+                LocalTime.of(8, 0), LocalTime.of(10, 0), null));
         flushAndClear();
 
         var saved = entityManager.find(CourseClass.class, original.getId());
@@ -124,8 +125,8 @@ class CourseClassDailyRuleTests {
         var saved = entityManager.find(CourseClass.class, original.getId());
         assertEquals(second.getId(), saved.getCourse().getId());
         assertEquals(DAY, saved.getDay());
-        assertEquals(DAY.atTime(8, 0), saved.getStart());
-        assertEquals(DAY.atTime(10, 0), saved.getFinish());
+        assertEquals(LocalTime.of(8, 0), saved.getStart());
+        assertEquals(LocalTime.of(10, 0), saved.getFinish());
     }
 
     private Course course(String name) {
@@ -133,7 +134,7 @@ class CourseClassDailyRuleTests {
     }
 
     private CourseClass addClass(Course course, LocalDate day) {
-        return classes.addCourseClass(new AddCourseClassDto(day, "Manhã", day.atTime(8, 0), day.atTime(10, 0), course));
+        return classes.addCourseClass(new AddCourseClassDto(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course));
     }
 
     private void flushAndClear() {

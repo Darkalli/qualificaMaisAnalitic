@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -51,7 +52,7 @@ class CourseServiceTests {
     void partialUpdatePreservesIdentityDatesAndClasses() {
         var course = new Course("Informática", "Descrição", START, START.plusMonths(1));
         course.setId(3L);
-        var courseClass = new CourseClass(START, "Manhã", START.atTime(8, 0), START.atTime(10, 0), course);
+        var courseClass = new CourseClass(START, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         course.getCourseClass().add(courseClass);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
         service.updateCourse(new UpdateCourseDto(3L, "Informática básica", null, null, null));

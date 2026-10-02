@@ -1,0 +1,12 @@
+ALTER TABLE course_class ADD COLUMN start_time TIME(6);
+ALTER TABLE course_class ADD COLUMN finish_time TIME(6);
+UPDATE course_class SET start_time = CAST(start AS TIME), finish_time = CAST(finish AS TIME);
+ALTER TABLE course_class ALTER COLUMN start_time SET NOT NULL;
+ALTER TABLE course_class ALTER COLUMN finish_time SET NOT NULL;
+ALTER TABLE course_class DROP COLUMN start;
+ALTER TABLE course_class DROP COLUMN finish;
+ALTER TABLE course_class RENAME COLUMN start_time TO start;
+ALTER TABLE course_class RENAME COLUMN finish_time TO finish;
+ALTER TABLE course_class ADD COLUMN status_class VARCHAR(32) DEFAULT 'ACTIVE' NOT NULL;
+ALTER TABLE course_class ADD CONSTRAINT ck_class_times CHECK (start < finish);
+ALTER TABLE course_class ADD CONSTRAINT ck_class_status CHECK (status_class IN ('ACTIVE', 'CANCELED', 'POSTPONED'));

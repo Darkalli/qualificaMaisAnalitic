@@ -8,8 +8,11 @@ import com.entities.CourseClass;
 import com.entities.Person;
 import com.entities.Presence;
 import com.repositories.CourseClassRepository;
+import com.repositories.CourseRepository;
+import com.enums.StatusClass;
 import com.repositories.PersonRepository;
 import com.repositories.PresenceRepository;
+import com.repositories.RegisterRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,24 +25,42 @@ public class PresenceService {
     private final PresenceRepository presenceRepository;
     private final PersonRepository personRepository;
     private final CourseClassRepository courseClassRepository;
+    private final RegisterRepository repository;
+    private final CourseRepository courseRepository;
 
 
-    public PresenceService(PresenceRepository presenceRepository, PersonRepository personRepository, CourseClassRepository courseClassRepository) {
+    public PresenceService(PresenceRepository presenceRepository, PersonRepository personRepository, CourseClassRepository courseClassRepository, RegisterRepository repository, CourseRepository courseRepository) {
         this.presenceRepository = presenceRepository;
         this.personRepository = personRepository;
         this.courseClassRepository = courseClassRepository;
+        this.repository = repository;
+        this.courseRepository = courseRepository;
     }
 
     @Transactional
     public Presence addPresence(AddPresenceDto dto) {
-        Person person = personRepository.findById(dto.personId())
+        Long courseId = courseClassRepository.findCourseIdById(dto.courseClassId())
+                .orElseThrow(() -> new EntityNotFoundException("Aula não encontrada"));
+        courseRepository.findByIdForRegistration(courseId)
+                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
+        Person person = personRepository.findByIdForUpdate(dto.personId())
                 .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada"));
         CourseClass courseClass = courseClassRepository.findById(dto.courseClassId())
                 .orElseThrow(() -> new EntityNotFoundException("Aula não encontrada"));
+        Course course = courseClass.getCourse();
+        if (!courseId.equals(course.getId())) {
+            throw new IllegalArgumentException("O curso da aula foi alterado por outra operação. Tente novamente.");
+        }
+        if (courseClass.getStatusClass() != StatusClass.ACTIVE) {
+            throw new IllegalArgumentException("Não é possível registrar presença em aula cancelada ou adiada.");
+        }
+        if (!repository.existsByPersonAndCourseOfInterest(person, course)) {
+            throw new IllegalArgumentException("A pessoa não possui inscrição no curso desta aula.");
+        }
+
         if (presenceRepository.existsByPersonAndCourseClass(person, courseClass)) {
             throw new IllegalArgumentException("O Aluno(a) já possui uma presença registrada para esta aula.");
         }
-        Course course = courseClass.getCourse();
         Presence presence = new Presence(person, courseClass, course, dto.status());
         return presenceRepository.save(presence);
     }
