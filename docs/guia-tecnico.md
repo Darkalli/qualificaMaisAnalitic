@@ -25,7 +25,64 @@ A chamada `collect()` e o Quickstart continuam retornando objetos em memória, s
 
 ## API HTTP
 
-Após configurar o PostgreSQL conforme as seções seguintes, execute `com.QualificaMaisAnaliticApplication` ou `.\mvnw.cmd spring-boot:run`. O starter web inicia o servidor HTTP; a URL padrão é `http://localhost:8080`, salvo configuração local de porta/contexto. A inicialização também executa as migrações e pode iniciar a coleta agendada. Para testar somente a API, configure `app.sheets.check-enabled=false` no arquivo local.
+### Login e renovação de sessão
+
+`User` é o usuário de acesso, separado de `Person` (cadastro de alunos). Possui `username`, senha com hash BCrypt e perfil `AGENT` ou `ADMIN`. Os dois perfis têm exatamente as mesmas permissões, inclusive cadastrar outros usuários. O Spring recebe `ROLE_AGENT`/`ROLE_ADMIN`; restrições futuras podem ser acrescentadas no `SecurityConfig` ou com `@PreAuthorize`, sem alterar a estrutura de usuários.
+
+O primeiro usuário é criado na inicialização somente se `app_user` estiver vazia e `AUTH_BOOTSTRAP_USERNAME`/`AUTH_BOOTSTRAP_PASSWORD` estiverem configurados no ambiente. Também é possível preencher `app.auth.bootstrap.username` e `app.auth.bootstrap.password` no arquivo local ignorado pelo Git. Remova essas configurações após o primeiro cadastro. Não há senha padrão nem cadastro público; reiniciar a aplicação não redefine usuários existentes. O perfil inicial é `ADMIN`, com as mesmas permissões de `AGENT`.
+
+Nome de usuário: 3–64 letras/números/ponto/hífen/sublinhado, normalizado para minúsculas e sem espaços nas extremidades. Senha: mínimo de 8 caracteres e máximo de 72 bytes UTF-8, sem normalização. A senha não é retornada pela API.
+
+| Método | Rota | Autenticação e resultado |
+| --- | --- | --- |
+| POST | `/api/auth/login` | Pública. Recebe `username` e `password`; retorna token, tipo `Bearer`, `expiresAt` UTC e usuário. |
+| POST | `/api/auth/refresh` | Bearer atual, sem corpo. Valida a sessão e devolve um token novo com mais 15 dias. O token anterior deixa de funcionar. |
+| GET | `/api/auth/me` | Bearer. Retorna `id`, `username` e `role`; não renova o token. |
+| POST | `/api/auth/logout` | Bearer, sem corpo. Revoga a sessão atual e retorna 204. Sessões de outros computadores continuam válidas. |
+| POST | `/api/auth/register` | Bearer de ADMIN ou AGENT. Recebe `username`, `password` e `role`; retorna usuário sem senha/hash (201). |
+
+Login:
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{"username":"operador","password":"sua-senha-configurada"}
+```
+
+Resposta (valores ilustrativos):
+
+```json
+{
+  "token": "token-retornado-pela-api",
+  "tokenType": "Bearer",
+  "expiresAt": "2026-10-17T12:00:00Z",
+  "user": {"id": 1, "username": "operador", "role": "ADMIN"}
+}
+```
+
+Ao ligar o PC e abrir o aplicativo:
+
+1. Recuperar o token guardado no armazenamento seguro do sistema operacional.
+2. Enviar `POST /api/auth/refresh` com `Authorization: Bearer <token>`, sem corpo JSON.
+3. Se retornar 200, salvar imediatamente o novo token e substituir o antigo; usar o novo nas demais requisições.
+4. Se retornar 401, apagar o token local e pedir usuário/senha. Falha de rede ou 5xx não significa credencial expirada: manter o token e tentar novamente.
+
+Cada renovação válida inicia mais 15 dias, sem prazo total fixo para a conta permanecer conectada. Se o aplicativo ficar aberto por vários dias, renovar periodicamente (por exemplo, uma vez por dia); consultas normais não prolongam a validade. No instante exato de expiração, o token deixa de ser aceito, inclusive para renovação. Coordenar uma renovação por vez no cliente: duas renovações simultâneas com o mesmo token não produzem dois tokens válidos. Se a resposta da renovação se perder depois de concluída no servidor, será necessário entrar com senha novamente, pois o token anterior já foi invalidado.
+
+Cadastro de outro usuário autenticado:
+
+```json
+{"username":"novo.agente","password":"senha-escolhida-pelo-usuario","role":"AGENT"}
+```
+
+Os tokens são valores aleatórios opacos de 256 bits; somente seu hash SHA-256 fica na tabela `auth_session`. A validade e o usuário vêm do banco, portanto a sessão sobrevive ao reinício da API. Não são usados cookies de login nem sessão HTTP; a API aceita somente o header Bearer e exige HTTPS na implantação para proteger senha/token em trânsito. As respostas de login/renovação têm `Cache-Control: no-store`.
+
+O `TokenAuthenticationFilter` popula o contexto do Spring Security a cada requisição; o `AuthService` trava e revalida a sessão ao renovar ou sair. O funcionamento segue a [arquitetura de autenticação do Spring Security](https://docs.spring.io/spring-security/reference/servlet/authentication/architecture.html). No Swagger, use **Authorize** e cole o token retornado; as páginas e a especificação permanecem públicas.
+
+### Rotas de negócio
+
+Após configurar o PostgreSQL conforme as seções seguintes, execute `com.QualificaMaisAnaliticApplication` ou `.\mvnw.cmd spring-boot:run`. O starter web inicia o servidor HTTP; a URL padrão é `http://localhost:8080`, salvo configuração local de porta/contexto. A inicialização também executa as migrações e pode iniciar a coleta agendada. Para testar somente a API, configure `app.sheets.check-enabled=false` no arquivo local. Inclua `Authorization: Bearer <token>` nos exemplos abaixo.
 
 As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/person/person/{cpf}`, fazem parte do contrato existente. POST e PATCH recebem JSON com `Content-Type: application/json`; as respostas contêm as entidades salvas.
 
@@ -41,7 +98,7 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | GET | `/api/course` | Lista cursos. | 200 + lista |
 | GET | `/api/course/course/{name}` | Busca um curso pelo nome exato. | 200 + curso |
 | DELETE | `/api/course/course/{id}` | Exclui pelo ID do curso. | 204 sem corpo |
-| POST | `/api/courseClass` | `AddCourseClassDto`: dia, sessão, horários e referência `course: {"id": ...}`. | 201 + turma |
+| POST | `/api/courseClass` | `AddCourseClassDto`: dia, sessão, horários e `courseId` do curso existente. | 201 + turma |
 | PATCH | `/api/courseClass` | `UpdateCourseClassDto`: `classId` e campos a atualizar. | 200 + turma |
 | GET | `/api/courseClass/courseClass/{courseId}` | Lista turmas de um curso existente. | 200 + lista |
 | DELETE | `/api/courseClass/courseClass/{id}` | Cancela a aula pelo ID, preservando o histórico. | 204 sem corpo |
@@ -54,7 +111,7 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | GET | `/api/register` | **Corpo JSON** com `personCpf` e `courseOfInterestId`. | 200 + inscrição |
 | DELETE | `/api/register` | Mesmo corpo da busca específica. | 204 sem corpo |
 
-As consultas de presenças por aula/curso e de inscrição por CPF/curso usam `@RequestBody` em GET. Os parâmetros na URL não substituem o corpo obrigatório. A exclusão de inscrição também exige corpo JSON. A API declara 22 endpoints, incluindo as quatro rotas de inscrição cobertas por testes MockMvc.
+As consultas de presenças por aula/curso e de inscrição por CPF/curso usam `@RequestBody` em GET. Os parâmetros na URL não substituem o corpo obrigatório. A exclusão de inscrição também exige corpo JSON. A API declara 22 endpoints de negócio e cinco de autenticação.
 
 ### Exemplos de entrada
 
@@ -86,7 +143,7 @@ $courseBody = @{
     start = '2026-10-01'
     finish = '2026-11-01'
 } | ConvertTo-Json
-$course = Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/course' -ContentType 'application/json' -Body $courseBody
+$course = Invoke-RestMethod -Method Post -Uri 'http://localhost:8080/api/course' -Headers @{Authorization = "Bearer $token"} -ContentType 'application/json' -Body $courseBody
 $course.id
 ```
 
@@ -98,9 +155,13 @@ Turma (`POST /api/courseClass`), substituindo `42` pelo ID retornado no cadastro
   "session": "Manhã",
   "start": "08:00:00",
   "finish": "10:00:00",
-  "course": {"id": 42}
+  "courseId": 42
 }
 ```
+
+Na criação, envie `courseId` diretamente; o formato antigo `course: {"id": ...}` não preenche esse campo. ID ausente retorna 400; ID não encontrado retorna 404. O PATCH de aula continua usando `course: {"id": ...}` quando houver troca de curso. Horários usam texto `HH:mm:ss`.
+
+O Swagger fica em `/swagger-ui/index.html`, e a especificação em `/v3/api-docs`. O projeto usa springdoc 3.1.1, da linha compatível com Spring Boot 4 segundo a [documentação oficial](https://springdoc.org/). Os testes verificam a disponibilidade da UI e o schema de criação de aula com `courseId` e horários como strings.
 
 Presença (`POST /api/presence`), usando IDs existentes de pessoa e aula:
 
@@ -129,6 +190,7 @@ As respostas usam as entidades JPA diretamente. Um curso inclui `courseClass`; c
 | HTTP | Situação |
 | --- | --- |
 | 400 | JSON/corpo inválido, CPF/telefone inválido, identificador obrigatório ausente, horários inválidos ou campo obrigatório nulo. |
+| 401 / 403 | Login/token ausente, inválido ou expirado / acesso negado. Atualmente não existem restrições diferentes entre os dois perfis. |
 | 404 | Registro solicitado não encontrado, inclusive exclusão de pessoa/curso inexistentes, ou rota inexistente. Listagens vazias continuam retornando 200. |
 | 409 | Duplicidade, conflito de horários, presença sem inscrição/em aula inativa, alteração de aula com presenças, vínculos que impedem exclusão ou disputa por bloqueio. Busca singular com vários resultados também retorna 409. |
 | 405 / 415 | Método HTTP não permitido / tipo de conteúdo não suportado. |
@@ -146,7 +208,7 @@ Para conferir sem cadastrar dados, execute `GET /api/person/person/123`: a respo
 
 Ainda não há validação completa dos campos com Bean Validation. As obrigatoriedades existentes foram preservadas; não foram acrescentadas regras de e-mail, dígitos verificadores de CPF ou novas exigências para cursos. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
 
-Os endpoints ainda não têm autenticação/autorização. O endereço é recebido com a pessoa e não possui endpoints independentes. A inscrição direta e a importação compartilham a checagem de horários. Presença exige inscrição no curso da aula; a unicidade pessoa/aula é garantida pela V1.
+Os endpoints de negócio exigem Bearer válido; ADMIN e AGENT têm acesso igual. O endereço é recebido com a pessoa e não possui endpoints independentes. A inscrição direta e a importação compartilham a checagem de horários. Presença exige inscrição no curso da aula; a unicidade pessoa/aula é garantida pela V1.
 
 ### Uma aula por curso e dia
 
@@ -201,7 +263,7 @@ O serviço de persistência recebe inscrições com pessoa e endereço novos, co
 
 ### Preparar o PostgreSQL
 
-Crie um banco vazio e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica `V1__create_initial_schema.sql`, criando as sete tabelas, `V2__require_class_session_and_times.sql`, tornando sessão/início/fim obrigatórios, e `V3__class_times_and_status.sql`, convertendo horários para `TIME` e criando o status da aula. O Hibernate valida a estrutura (`ddl-auto=validate`).
+Para uma instalação nova, crie um banco vazio e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica V1 (estrutura inicial), V2 (sessão/horários obrigatórios), V3 (horários `TIME` e status da aula) e `V4__users_and_auth_sessions.sql` (usuários e sessões de login). A V4 acrescenta duas tabelas e preserva os cadastros existentes. O Hibernate valida a estrutura (`ddl-auto=validate`).
 
 Em um banco que já tem a V1 consolidada, a V2 preserva dados e IDs, mas exige corrigir previamente aulas com sessão/horários nulos. A migração falha se encontrar esses dados; não preenche valores nem exclui aulas automaticamente. As anotações JPA são `@Column(nullable=false)` nos campos simples; a FK continua em `CourseClass.course`, e a coleção inversa em `Course` usa somente `mappedBy`.
 
@@ -328,11 +390,12 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 .\mvnw.cmd test
 ```
 
-O perfil `test` usa dados fictícios, H2 em memória, Flyway e validação de schema; coleta Google desabilitada. Não acessa o banco de trabalho. Resultado de 02/10/2026: **312 testes aprovados em H2 e PostgreSQL 18.6 isolado**, sem falhas, erros ou ignorados. Logs: `target/api-errors-h2-tests.log` e `target/api-errors-postgres-tests.log`.
+O perfil `test` usa dados fictícios, H2 em memória, Flyway e validação de schema; coleta Google desabilitada. Não acessa o banco de trabalho. Resultado de 02/10/2026: **341 testes aprovados em H2 e PostgreSQL 18.6 isolado**, sem falhas, erros ou ignorados. Logs: `target/auth-h2-tests.log` e `target/auth-postgres-tests.log`.
 
 | Área | Cobertura |
 | --- | --- |
-| API e serviços | 37 casos em `ApiControllerTests` para os 22 endpoints e 6 em `ApiExceptionHandlerTests`; sucesso, erros 400/404/405/409/415/500, dados obrigatórios, histórico e rollback. |
+| Autenticação | 22 casos HTTP com Bearer real, relógio controlado, expiração/renovação/logout, perfis com acesso igual e rotação simultânea; 3 casos de cadastro inicial e 2 da migração V4. |
+| API e serviços | 39 casos em `ApiControllerTests` para os 22 endpoints e 6 em `ApiExceptionHandlerTests`; sucesso, erros 400/404/405/409/415/500, dados obrigatórios, histórico e rollback. |
 | Importação | Reimportação, divergências, dados preservados, horários por ID de curso, conflitos existentes/entre linhas e rollback do lote, endereço e deficiências. |
 | Regras de aula | `ClassScheduleLifecycleTests`: 15 casos de criação após inscrição, reagendamento, validação de horários, cancelamento/adiamento, reativação e proteção de presenças. |
 | Concorrência | Unicidade de pessoa/curso, pessoa/aula e curso/dia; 11 casos de inscrição API/Sheets e 12 casos de lotes em ordem inversa, mudanças de aula versus inscrição e cancelamento versus presença. |
@@ -341,10 +404,11 @@ O perfil `test` usa dados fictícios, H2 em memória, Flyway e validação de sc
 
 As verificações de concorrência usam transações independentes e conferem o estado confirmado. A suíte não equivale a teste de carga ou validação operacional do servidor. CPF é normalizado por quantidade de dígitos, sem cálculo de dígitos verificadores.
 
-Para apenas API ou os novos fluxos:
+Para apenas API, autenticação ou os fluxos de aula:
 
 ```powershell
 .\mvnw.cmd test "-Dtest=ApiControllerTests"
+.\mvnw.cmd test "-Dtest=AuthControllerTests,InitialUserConfigurationTests,AuthMigrationTests"
 .\mvnw.cmd test "-Dtest=ClassScheduleLifecycleTests,ConcurrentClassAndBatchTests,ClassTimeStatusMigrationTests"
 ```
 

@@ -26,9 +26,9 @@ Backend para gerenciar pessoas, cursos, turmas, inscrições e presenças. Ofere
    .\mvnw.cmd spring-boot:run
    ```
 
-A API fica em `http://localhost:8080` por padrão. Na IDE, execute `com.QualificaMaisAnaliticApplication` com o processamento de anotações habilitado para Lombok e MapStruct.
+A API fica em `http://localhost:8080` por padrão. Na IDE, execute `com.QualificaMaisAnaliticApplication` com o processamento de anotações habilitado para Lombok e MapStruct. Para criar o primeiro usuário, configure `AUTH_BOOTSTRAP_USERNAME` e `AUTH_BOOTSTRAP_PASSWORD` no ambiente da execução antes de iniciar; remova essas variáveis após o cadastro inicial. Veja o [fluxo de login](docs/guia-tecnico.md#login-e-renovação-de-sessão).
 
-O Flyway aplica V1–V3: estrutura inicial, campos obrigatórios e horários/status de aulas. A V3 usa horários sem data e exige início anterior ao fim. A V1 consolidada não converte instalações com o histórico antigo. Veja os [detalhes de migração](docs/guia-tecnico.md#preparar-o-postgresql).
+O Flyway aplica V1–V4: estrutura inicial, campos obrigatórios, horários/status de aulas e usuários/sessões de acesso. A V3 usa horários sem data e exige início anterior ao fim. A V1 consolidada não converte instalações com o histórico antigo. Veja os [detalhes de migração](docs/guia-tecnico.md#preparar-o-postgresql).
 
 ## API
 
@@ -39,10 +39,13 @@ O Flyway aplica V1–V3: estrutura inicial, campos obrigatórios e horários/sta
 | Turmas | `/api/courseClass` | Cadastro, atualização/status, consulta por curso e cancelamento |
 | Presenças | `/api/presence` | Registro/atualização por pessoa + aula; consultas por pessoa ou aula/curso |
 | Inscrições | `/api/register` | Criação, consulta por CPF ou CPF/curso e exclusão |
+| Autenticação | `/api/auth` | Login, renovação, logout, usuário atual e cadastro de usuários de acesso |
 
 POST e PATCH recebem JSON. Criações retornam **201**, consultas e atualizações **200**, e exclusões **204**.
 
-Erros retornam JSON com `status` e `message`: **400** para dados inválidos, **404** para registro não encontrado, **409** para conflitos e **500** para falhas inesperadas. Detalhes no [guia de respostas](docs/guia-tecnico.md#respostas-e-limites-atuais).
+As rotas de negócio exigem `Authorization: Bearer <token>`. Faça login em `POST /api/auth/login` com `username` e `password`. O token dura 15 dias; `POST /api/auth/refresh` valida o token atual, emite outro por mais 15 dias e invalida o anterior. `ADMIN` e `AGENT` têm as mesmas permissões. Swagger público em `/swagger-ui/index.html`, com botão **Authorize**.
+
+Erros retornam JSON com `status` e `message`: **400** para dados inválidos, **401** para login/token ausente, inválido ou expirado, **403** para acesso negado, **404** para registro não encontrado, **409** para conflitos e **500** para falhas inesperadas. Detalhes no [guia de respostas](docs/guia-tecnico.md#respostas-e-limites-atuais).
 
 Consulte as [rotas completas e exemplos](docs/guia-tecnico.md#api-http): algumas URLs repetem o recurso, como `/api/person/person/{cpf}`, e os GETs de presença por curso/aula e de inscrição por CPF/curso exigem corpo JSON. Endereços não têm endpoints próprios.
 
@@ -88,7 +91,7 @@ Para executar apenas os testes da API:
 
 ## Estado atual
 
-Inscrição, importação e alteração de aulas verificam conflitos com bloqueios transacionais. Lotes bloqueiam cursos e pessoas em ordem fixa. Presença exige inscrição e aula ativa. Cancelamento preserva o histórico; aulas canceladas/adiadas não ocupam horário para inscrições. Erros da API têm tratamento centralizado. Ainda faltam autenticação e validações restantes. As respostas de sucesso usam entidades JPA diretamente.
+Inscrição, importação e alteração de aulas verificam conflitos com bloqueios transacionais. Lotes bloqueiam cursos e pessoas em ordem fixa. Presença exige inscrição e aula ativa. Cancelamento preserva o histórico; aulas canceladas/adiadas não ocupam horário para inscrições. Erros da API têm tratamento centralizado. Autenticação com token implementada; restrições diferentes por perfil e validações restantes ficam para depois. As respostas de negócio usam entidades JPA diretamente; autenticação retorna DTOs sem senha/hash.
 
 A criação e a edição de aulas consultam duplicidade por curso/dia, considerando a própria aula e campos omitidos. A V1 também garante curso/dia obrigatórios e únicos no banco, inclusive em gravações simultâneas. Veja os [detalhes da regra de aulas](docs/guia-tecnico.md#uma-aula-por-curso-e-dia).
 
