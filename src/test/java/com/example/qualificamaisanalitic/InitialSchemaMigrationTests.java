@@ -33,7 +33,8 @@ class InitialSchemaMigrationTests {
         schema = "initial_schema_test_" + UUID.randomUUID().toString().replace("-", "");
         prefix = "\"" + schema + "\".";
         jdbc = new JdbcTemplate(dataSource);
-        flyway = Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).load();
+        // Esta classe verifica especificamente o contrato da V1; evoluções têm testes próprios.
+        flyway = Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema).target("1").load();
         assertEquals(1, flyway.migrate().migrationsExecuted);
     }
 
