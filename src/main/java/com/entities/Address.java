@@ -19,7 +19,7 @@ public class Address {
     private Long id;
 
     @Column(nullable = false)
-    private int number;
+    private Integer number;
     @Column(nullable = false, columnDefinition = "text")
     private String street;
     @Column(nullable = false, columnDefinition = "text")

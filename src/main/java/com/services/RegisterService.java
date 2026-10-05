@@ -18,6 +18,7 @@ import java.util.List;
 
 import static com.utils.CpfUtils.*;
 import static com.utils.RegisterUtils.*;
+import static com.utils.ValidationUtils.*;
 
 @Service
 public class RegisterService {
@@ -35,9 +36,7 @@ public class RegisterService {
     @Transactional
     public Register addRegister (AddRegisterDto dto){
         validateKey(dto.personCpf(), dto.courseOfInterestId());
-        if (dto.registerDate() == null) {
-            throw new IllegalArgumentException("A data de inscrição é obrigatória.");
-        }
+        required(dto.registerDate(), "registerDate");
         String cpf = formatCpf(dto.personCpf());
         cpf = cleanCpf(cpf);
         Course course = courseRepository.findByIdForRegistration(dto.courseOfInterestId())
@@ -46,7 +45,7 @@ public class RegisterService {
                 .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada"));
         Register newRegister = new Register(person, course, dto.registerDate());
         if (hasScheduleConflict(registerRepository, newRegister)) {
-            throw new ConflictException("Não é possivel se inscrever em cursos com mesmos horarios");
+            throw new ConflictException("A pessoa já está inscrita em um curso com horário conflitante.");
         }else {
             return registerRepository.save(newRegister);
         }
@@ -62,6 +61,7 @@ public class RegisterService {
     }
 
     public List<Register> getAllRegisterByCpf(String cpfIn){
+        required(cpfIn, "cpf");
         String cpf = formatCpf(cpfIn);
         cpf = cleanCpf(cpf);
         return registerRepository.findByPerson_Cpf(cpf);
@@ -75,8 +75,7 @@ public class RegisterService {
                 .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados."));
     }
     private void validateKey(String cpf, Long courseId) {
-        if (cpf == null || courseId == null) {
-            throw new IllegalArgumentException("CPF e curso são obrigatórios.");
-        }
+        required(cpf, "personCpf");
+        positiveId(courseId, "courseOfInterestId");
     }
 }

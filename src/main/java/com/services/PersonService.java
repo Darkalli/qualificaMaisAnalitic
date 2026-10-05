@@ -17,6 +17,7 @@ import java.util.Set;
 
 import static com.utils.CpfUtils.*;
 import static com.utils.CellphoneUtils.*;
+import static com.utils.ValidationUtils.*;
 
 @Service
 public class PersonService {
@@ -30,15 +31,21 @@ public class PersonService {
     }
 
     public Person addPerson (AddPersonDto addPerson){
+        required(addPerson.fullName(), "fullName");
+        required(addPerson.cpf(), "cpf");
+        email(addPerson.email());
+        required(addPerson.personalPhone(), "personalPhone");
+        required(addPerson.personalPhoneHasWhatsapp(), "personalPhoneHasWhatsapp");
+        required(addPerson.gender(), "gender");
+        required(addPerson.education(), "education");
+        required(addPerson.workState(), "workState");
+        address(addPerson.address());
         String cpf = formatCpf(addPerson.cpf());
         cpf = cleanCpf(cpf);
         String cellphone = cleanPhone(addPerson.personalPhone());
         String familyPhone = cleanPhone(addPerson.familyPhone());
         Set<Disabilities> newDisabilities = Disabilities.processAndValidateDisabilities(
                 addPerson.disabilities() == null ? null : new ArrayList<>(addPerson.disabilities()));
-        if (addPerson.address() == null) {
-            throw new IllegalArgumentException("O endereço é obrigatório.");
-        }
         Address address = new Address(addPerson.address().getNumber(),
                 addPerson.address().getStreet(), addPerson.address().getNeighborhood());
 
@@ -50,13 +57,29 @@ public class PersonService {
 
     @Transactional
     public Person updatePerson (UpdatePersonDto updatePerson){
-        if (updatePerson.Cpf() == null) {
-            throw new IllegalArgumentException("O CPF é obrigatório.");
-        }
+        required(updatePerson.Cpf(), "Cpf");
         String cpf = formatCpf(updatePerson.Cpf());
         cpf = cleanCpf(cpf);
         Person person = personRepository.findByCpf(cpf)
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada."));
+        if (updatePerson.email() != null) {
+            email(updatePerson.email());
+        }
+        if (updatePerson.personalPhone() != null) {
+            required(updatePerson.personalPhone(), "personalPhone");
+        }
+        Address changedAddress = null;
+        if (updatePerson.address() != null) {
+            Address incoming = updatePerson.address();
+            Address current = person.getAddress();
+            if (incoming.getId() != null && !incoming.getId().equals(current.getId())) {
+                throw new IllegalArgumentException("O campo 'address.id' não pode alterar o endereço vinculado à pessoa.");
+            }
+            changedAddress = new Address(incoming.getNumber() != null ? incoming.getNumber() : current.getNumber(),
+                    incoming.getStreet() != null ? incoming.getStreet() : current.getStreet(),
+                    incoming.getNeighborhood() != null ? incoming.getNeighborhood() : current.getNeighborhood());
+            address(changedAddress);
+        }
         String cellphone = updatePerson.personalPhone() == null
                 ? person.getPersonalPhone() : cleanPhone(updatePerson.personalPhone());
         String familyPhone = updatePerson.familyPhone() == null
@@ -64,6 +87,11 @@ public class PersonService {
         Set<Disabilities> newDisabilities = updatePerson.disabilities() == null ? null
                 : Disabilities.processAndValidateDisabilities(new ArrayList<>(updatePerson.disabilities()));
         mapper.updatePersonfromDto(updatePerson, person);
+        if (changedAddress != null) {
+            person.getAddress().setNumber(changedAddress.getNumber());
+            person.getAddress().setStreet(changedAddress.getStreet());
+            person.getAddress().setNeighborhood(changedAddress.getNeighborhood());
+        }
         if (newDisabilities != null) {
             person.setDisabilities(newDisabilities);
         }
@@ -74,6 +102,7 @@ public class PersonService {
     }
 
    public void deletePerson (Long id){
+       positiveId(id, "id");
        Person person = personRepository.findById(id)
                .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada"));
        personRepository.delete(person);
@@ -84,9 +113,10 @@ public class PersonService {
    }
 
    public Person getByCpf (String cpf){
+       required(cpf, "cpf");
        String formatedCpf = formatCpf(cpf);
        formatedCpf = cleanCpf(formatedCpf);
         return personRepository.findByCpf(formatedCpf)
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada."));
    }
 }

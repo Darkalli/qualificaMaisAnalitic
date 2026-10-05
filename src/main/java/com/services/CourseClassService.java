@@ -19,6 +19,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 import static com.utils.RegisterUtils.hasScheduleConflict;
+import static com.utils.ValidationUtils.*;
 
 @Service
 public class CourseClassService {
@@ -43,9 +44,7 @@ public class CourseClassService {
     @Transactional
     public CourseClass addCourseClass(AddCourseClassDto dto) {
         validateTimes(dto.day(), dto.session(), dto.start(), dto.finish());
-        if (dto.courseId() == null) {
-            throw new IllegalArgumentException("O ID do curso é obrigatório.");
-        }
+        positiveId(dto.courseId(), "courseId");
         Course course2 = courseRepository.findByid(dto.courseId())
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o ID: " + dto.courseId()));
         Course course = lockCourse(course2);
@@ -91,37 +90,37 @@ public class CourseClassService {
     }
 
     public List<CourseClass> allClassesByCourseId(Long courseId) {
+        positiveId(courseId, "courseId");
         Course course = courseRepository.findByid(courseId)
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o ID: " + courseId));
         return courseClassRepository.findByCourse(course);
     }
 
     private void validateTimes(LocalDate day, String session, LocalTime start, LocalTime finish) {
-        if (day == null || session == null || session.isBlank() || start == null || finish == null) {
-            throw new IllegalArgumentException("Dia, sessão e horários da aula são obrigatórios.");
-        }
+        required(day, "day");
+        required(session, "session");
+        maxLength(session, 255, "session");
+        required(start, "start");
+        required(finish, "finish");
         if (!start.isBefore(finish)) {
             throw new IllegalArgumentException("O horário de início deve ser anterior ao horário de fim.");
         }
     }
 
     private Course lockCourse(Course course) {
-        if (course == null || course.getId() == null) {
-            throw new IllegalArgumentException("O curso da aula é obrigatório.");
-        }
+        required(course, "course");
+        positiveId(course.getId(), "course.id");
         return courseRepository.findByIdForUpdate(course.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
     }
 
     private CourseClass lockClass(Long id, Course replacement) {
-        if (id == null) {
-            throw new IllegalArgumentException("O ID da aula é obrigatório.");
+        positiveId(id, "classId");
+        if (replacement != null) {
+            positiveId(replacement.getId(), "course.id");
         }
         Long currentCourseId = courseClassRepository.findCourseIdById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Turma não encontrada com o ID: " + id));
-        if (replacement != null && replacement.getId() == null) {
-            throw new IllegalArgumentException("O curso da aula é obrigatório.");
-        }
         Stream.of(currentCourseId, replacement == null ? currentCourseId : replacement.getId())
                 .distinct().sorted().forEach(courseId -> courseRepository.findByIdForUpdate(courseId)
                         .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado")));

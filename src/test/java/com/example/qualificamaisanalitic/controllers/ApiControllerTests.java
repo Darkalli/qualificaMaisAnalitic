@@ -302,7 +302,7 @@ class ApiControllerTests {
         createPerson("01234567890", "Pessoa Exemplo");
         long courseId = id(createCourse("Curso A"));
         for (String payload : new String[]{registrationBody("98765432100", courseId),
-                registrationBody("01234567890", -1)}) {
+                registrationBody("01234567890", Long.MAX_VALUE)}) {
             mvc.perform(post("/api/register").contentType(APPLICATION_JSON).content(payload))
                     .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.message").isNotEmpty());
@@ -317,7 +317,7 @@ class ApiControllerTests {
         createRegistration("01234567890", courseId);
         for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[]{
                 get("/api/register"), delete("/api/register")}) {
-            mvc.perform(request.contentType(APPLICATION_JSON).content(registrationKey("012.345.678-90", -1)))
+            mvc.perform(request.contentType(APPLICATION_JSON).content(registrationKey("012.345.678-90", Long.MAX_VALUE)))
                     .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.message").value("Inscrição não encontrada para a pessoa e o curso informados."));
         }
@@ -398,10 +398,33 @@ class ApiControllerTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/api/person/person/-1", "/api/course/course/-1", "/api/courseClass/courseClass/-1"})
+    @ValueSource(strings = {"/api/person/person/9223372036854775807", "/api/course/course/9223372036854775807", "/api/courseClass/courseClass/9223372036854775807"})
     void deletingAnUnknownRecordReturnsNotFound(String route) throws Exception {
         mvc.perform(delete(route)).andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404)).andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/person/person/-1", "/api/person/person/0", "/api/course/course/-1",
+            "/api/course/course/0", "/api/courseClass/courseClass/-1", "/api/courseClass/courseClass/0"})
+    void deletingWithANonPositiveIdReturnsBadRequest(String route) throws Exception {
+        mvc.perform(delete(route)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400)).andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void registrationRejectsNonPositiveCourseIds() throws Exception {
+        for (long courseId : new long[]{-1, 0}) {
+            mvc.perform(post("/api/register").contentType(APPLICATION_JSON)
+                            .content(registrationBody("01234567890", courseId)))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+            for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[]{
+                    get("/api/register"), delete("/api/register")}) {
+                mvc.perform(request.contentType(APPLICATION_JSON).content(registrationKey("01234567890", courseId)))
+                        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+            }
+        }
+        assertEquals(0, jdbc.queryForObject("select count(*) from register", Integer.class));
     }
 
     @Test
@@ -483,10 +506,15 @@ class ApiControllerTests {
                 {"day":"2026-10-02","session":"Tarde","start":"10:00:00","finish":"14:00:00"%s}
                 """;
         mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content(body.formatted("")))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("O ID do curso é obrigatório."));
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("O campo 'courseId' é obrigatório."));
+        for (long courseId : new long[]{-1, 0}) {
+            mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON)
+                            .content(body.formatted(",\"courseId\":" + courseId)))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        }
         mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON)
-                        .content(body.formatted(",\"courseId\":-1")))
-                .andExpect(status().isNotFound()).andExpect(jsonPath("$.message").value("Curso não encontrado com o ID: -1"));
+                        .content(body.formatted(",\"courseId\":" + Long.MAX_VALUE)))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.message").value("Curso não encontrado com o ID: " + Long.MAX_VALUE));
         assertEquals(0, jdbc.queryForObject("select count(*) from course_class", Integer.class));
     }
 

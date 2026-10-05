@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import static com.utils.ValidationUtils.*;
 
 @Service
 public class PresenceService {
@@ -40,9 +41,9 @@ public class PresenceService {
 
     @Transactional
     public Presence addPresence(AddPresenceDto dto) {
-        if (dto.personId() == null || dto.courseClassId() == null || dto.status() == null) {
-            throw new IllegalArgumentException("Pessoa, aula e status da presença são obrigatórios.");
-        }
+        positiveId(dto.personId(), "personId");
+        positiveId(dto.courseClassId(), "courseClassId");
+        required(dto.status(), "status");
         Long courseId = courseClassRepository.findCourseIdById(dto.courseClassId())
                 .orElseThrow(() -> new EntityNotFoundException("Aula não encontrada"));
         courseRepository.findByIdForRegistration(courseId)
@@ -71,9 +72,9 @@ public class PresenceService {
 
     @Transactional
     public Presence updatePresence (PresenceUpdateDto update){
-        if (update.personId() == null || update.courseClassId() == null || update.status() == null) {
-            throw new IllegalArgumentException("Pessoa, aula e status da presença são obrigatórios.");
-        }
+        positiveId(update.personId(), "personId");
+        positiveId(update.courseClassId(), "courseClassId");
+        required(update.status(), "status");
         Presence presence = presenceRepository.findByCourseClassIdAndPersonId(update.courseClassId(), update.personId())
                 .orElseThrow(() -> new EntityNotFoundException("Presença não encontrada"));
         presence.setStatus(update.status());
@@ -81,13 +82,13 @@ public class PresenceService {
     }
 
     public List<Presence> getPresenceByPerson(Long id){
+        positiveId(id, "personId");
         return presenceRepository.findByPersonId(id);
     }
 
     public List<Presence> getPresenceByDateAndCourse(PresenceByDayAndCourseDto dayAndCourse){
-        if (dayAndCourse.courseId() == null || dayAndCourse.courseClassId() == null) {
-            throw new IllegalArgumentException("Curso e aula são obrigatórios para consultar presenças.");
-        }
+        positiveId(dayAndCourse.courseId(), "courseId");
+        positiveId(dayAndCourse.courseClassId(), "courseClassId");
         return presenceRepository.findByCourseClassIdAndCourseId(dayAndCourse.courseClassId(), dayAndCourse.courseId());
     }
 }

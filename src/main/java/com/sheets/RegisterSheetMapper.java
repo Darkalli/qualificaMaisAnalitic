@@ -108,6 +108,7 @@ public class RegisterSheetMapper {
         person.setCpf(cleanCpf(formatCpf(cpf)));
 
         person.setEmail(cell(row, columns, Column.EMAIL));
+        com.utils.ValidationUtils.email(person.getEmail());
         person.setPersonalPhone(phone(cell(row, columns, Column.PERSONAL_PHONE), Column.PERSONAL_PHONE));
         person.setPersonalPhoneHasWhatsapp(whatsapp(cell(row, columns, Column.PERSONAL_PHONE_HAS_WHATSAPP)));
         person.setFamilyPhone(phone(cell(row, columns, Column.FAMILY_PHONE), Column.FAMILY_PHONE));
