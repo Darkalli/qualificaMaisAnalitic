@@ -161,6 +161,52 @@ class AuthControllerTests {
     }
 
     @Test
+    void expiredTokenInHeaderDoesNotBlockLoggingInAgain() throws Exception {
+        String stale = createLogin(UserRole.AGENT);
+        clock.at(NOW.plus(Duration.ofDays(15)));
+
+        // O token velho no header não pode impedir o login público que o próprio
+        // fluxo de reentrada depende; sem ele a sessão é anônima e o acesso segue.
+        var response = mvc.perform(post("/api/auth/login").header("Authorization", "Bearer " + stale)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"username\":\"operator\",\"password\":\"" + PASSWORD + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.username").value("operator"))
+                .andExpect(jsonPath("$.user.passwordHash").doesNotExist())
+                .andReturn();
+        String renewed = JsonPath.read(response.getResponse().getContentAsString(), "$.token");
+
+        assertNotEquals(stale, renewed);
+        assertEquals(2, sessions.count());
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + renewed)).andExpect(status().isOk());
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + stale)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void expiredTokenInHeaderDoesNotBlockPublicDocumentation() throws Exception {
+        String stale = createLogin(UserRole.AGENT);
+        clock.at(NOW.plus(Duration.ofDays(15)));
+
+        mvc.perform(get("/v3/api-docs").header("Authorization", "Bearer " + stale)).andExpect(status().isOk());
+        mvc.perform(get("/swagger-ui/index.html").header("Authorization", "Bearer " + stale)).andExpect(status().isOk());
+    }
+
+    @Test
+    void protectedRouteWithExpiredTokenKeepsTheSameUnauthorizedContract() throws Exception {
+        String stale = createLogin(UserRole.AGENT);
+        clock.at(NOW.plus(Duration.ofDays(15)));
+
+        // Rota protegida segue 401 com o mesmo corpo e cabeçalhos de sempre; a resposta
+        // agora vem do AuthorizationFilter, não do filtro de token.
+        mvc.perform(get("/api/course").header("Authorization", "Bearer " + stale))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message").value("Login necessário ou token inválido/expirado."))
+                .andExpect(header().string("WWW-Authenticate", "Bearer"))
+                .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    @Test
     void logoutRevokesOnlyTheCurrentComputerSession() throws Exception {
         String first = createLogin(UserRole.AGENT);
         String second = token(login("operator", PASSWORD).andExpect(status().isOk()));

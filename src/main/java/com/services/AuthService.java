@@ -42,6 +42,9 @@ public class AuthService {
         if (dto.password() == null || dto.password().isBlank()) {
             throw new IllegalArgumentException("A senha é obrigatória.");
         }
+        if (dto.password().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new BadCredentialsException("Usuário ou senha inválidos.");
+        }
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, dto.password()));
         User user = users.findByUsername(username).orElseThrow(() -> new BadCredentialsException("Login inválido."));
         return issueToken(new AuthSession(user, null, null));
@@ -72,7 +75,6 @@ public class AuthService {
 
     private AuthSession lockSession(AuthPrincipal principal) {
         AuthSession session = sessions.findByIdForUpdate(principal.sessionId()).orElseThrow(this::invalidToken);
-        // Revalidar após o lock impede duas renovações usando o mesmo token antigo.
         if (!session.getTokenHash().equals(principal.tokenHash()) || !session.getExpiresAt().isAfter(clock.instant())) {
             throw invalidToken();
         }

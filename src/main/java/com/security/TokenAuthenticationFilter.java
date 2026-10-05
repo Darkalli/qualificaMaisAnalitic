@@ -14,11 +14,9 @@ import java.util.List;
 
 public class TokenAuthenticationFilter extends OncePerRequestFilter {
     private final AuthService authService;
-    private final SecurityErrorHandler errors;
 
-    public TokenAuthenticationFilter(AuthService authService, SecurityErrorHandler errors) {
+    public TokenAuthenticationFilter(AuthService authService) {
         this.authService = authService;
-        this.errors = errors;
     }
 
     @Override
@@ -35,9 +33,9 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
                 context.setAuthentication(authentication);
                 SecurityContextHolder.setContext(context);
             } catch (AuthenticationException ex) {
+                // Token inválido ou expirado deixa a requisição anônima; quem responde
+                // 401 é o AuthorizationFilter, para que /api/auth/login continue acessível.
                 SecurityContextHolder.clearContext();
-                errors.commence(request, response, ex);
-                return;
             }
         }
         chain.doFilter(request, response);
