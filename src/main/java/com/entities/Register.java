@@ -1,5 +1,6 @@
 package com.entities;
 
+import com.enums.StatusRegister;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,11 +25,15 @@ public class Register {
     private Course courseOfInterest;
     @Column(nullable = false)
     private LocalDate registerDate;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private StatusRegister status = StatusRegister.ACTIVE;
 
-    public Register(Person person, Course courseOfInterest, LocalDate registerDate) {
+    public Register(Person person, Course courseOfInterest, LocalDate registerDate, StatusRegister status) {
         this.person = person;
         this.courseOfInterest = courseOfInterest;
         this.registerDate = registerDate;
+        this.status = status;
     }
 
     public Register() {

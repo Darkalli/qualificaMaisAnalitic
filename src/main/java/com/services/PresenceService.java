@@ -3,10 +3,8 @@ package com.services;
 import com.dtos.presenceDtos.AddPresenceDto;
 import com.dtos.presenceDtos.PresenceByDayAndCourseDto;
 import com.dtos.presenceDtos.PresenceUpdateDto;
-import com.entities.Course;
-import com.entities.CourseClass;
-import com.entities.Person;
-import com.entities.Presence;
+import com.entities.*;
+import com.enums.StatusRegister;
 import com.repositories.CourseClassRepository;
 import com.repositories.CourseRepository;
 import com.enums.StatusClass;
@@ -27,7 +25,7 @@ public class PresenceService {
     private final PresenceRepository presenceRepository;
     private final PersonRepository personRepository;
     private final CourseClassRepository courseClassRepository;
-    private final RegisterRepository repository;
+    private final RegisterRepository registerRepository;
     private final CourseRepository courseRepository;
 
 
@@ -35,7 +33,7 @@ public class PresenceService {
         this.presenceRepository = presenceRepository;
         this.personRepository = personRepository;
         this.courseClassRepository = courseClassRepository;
-        this.repository = repository;
+        this.registerRepository = repository;
         this.courseRepository = courseRepository;
     }
 
@@ -59,8 +57,11 @@ public class PresenceService {
         if (courseClass.getStatusClass() != StatusClass.ACTIVE) {
             throw new ConflictException("Não é possível registrar presença em aula cancelada ou adiada.");
         }
-        if (!repository.existsByPersonAndCourseOfInterest(person, course)) {
-            throw new ConflictException("A pessoa não possui inscrição no curso desta aula.");
+        Register register = registerRepository.findByPerson_CpfAndCourseOfInterest_Id(person.getCpf(), course.getId())
+                .orElseThrow(() -> new ConflictException("A pessoa não possui inscrição no curso desta aula."));
+
+        if (register.getStatus() == StatusRegister.CANCELED) {
+            throw new ConflictException("A pessoa possui inscrição cancelada no curso desta aula.");
         }
 
         if (presenceRepository.existsByPersonAndCourseClass(person, courseClass)) {

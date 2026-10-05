@@ -61,6 +61,21 @@ class RegisterSheetMapperTests {
     }
 
     @Test
+    void invalidEmailReportsItsRowWithoutDiscardingValidRowsOrExposingTheValue() {
+        for (String email : List.of("pessoa-sem-arroba", "pessoa@dominio", "pessoa@@example.com", "pessoa @example.com")) {
+            var invalid = row();
+            invalid.set(3, email);
+            var result = mapper.map(List.of(header(), invalid, row()), 1);
+            assertEquals(1, result.registers().size());
+            assertEquals("pessoa@example.com", result.registers().getFirst().getPerson().getEmail());
+            assertEquals(1, result.errors().size());
+            assertEquals(2, result.errors().getFirst().row());
+            assertTrue(result.errors().getFirst().message().contains("email"));
+            assertFalse(result.errors().getFirst().message().contains(email));
+        }
+    }
+
+    @Test
     void acceptsReorderedColumnsAndIgnoresExtraColumn() {
         var header = header();
         var row = row();

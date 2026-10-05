@@ -1,6 +1,7 @@
 package com.example.qualificamaisanalitic.controllers;
 
 import com.jayway.jsonpath.JsonPath;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -230,7 +231,7 @@ class ApiControllerTests {
     }
 
     @Test
-    void registrationLifecycleNormalizesCpfReusesPersonAndDeletesOnlySelectedCourse() throws Exception {
+    void registrationLifecycleNormalizesCpfReusesPersonAndCancelsOnlySelectedCourse() throws Exception {
         long personId = id(createPerson("01234567890", "Pessoa Exemplo"));
         long courseId = id(createCourse("Curso A"));
         long otherId = id(createCourse("Curso B"));
@@ -254,12 +255,72 @@ class ApiControllerTests {
         mvc.perform(delete("/api/register").contentType(APPLICATION_JSON).content(key))
                 .andExpect(status().isNoContent()).andExpect(content().string(""));
         mvc.perform(get("/api/register/register/{cpf}", "012.345.678-90"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value(otherRegisterId));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
+        mvc.perform(get("/api/register").contentType(APPLICATION_JSON).content(key))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(registerId))
+                .andExpect(jsonPath("$.status").value("CANCELED"));
+        mvc.perform(get("/api/register").contentType(APPLICATION_JSON)
+                        .content(registrationKey("01234567890", otherId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(otherRegisterId))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+        mvc.perform(post("/api/presence").contentType(APPLICATION_JSON).content("""
+                {"personId":%d,"courseClassId":%d,"status":"PRESENT"}
+                """.formatted(personId, classId)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409));
+        mvc.perform(patch("/api/register/active").contentType(APPLICATION_JSON).content(key))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Estado do registro atualizado com sucesso"));
+        mvc.perform(patch("/api/register/active").contentType(APPLICATION_JSON).content(key))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Estado do registro já está como ativo"));
+        mvc.perform(get("/api/register").contentType(APPLICATION_JSON).content(key))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(registerId))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
         assertEquals(1, jdbc.queryForObject("select count(*) from person", Integer.class));
         assertEquals(1, jdbc.queryForObject("select count(*) from address", Integer.class));
         assertEquals(1, jdbc.queryForObject("select count(*) from person_disabilities", Integer.class));
         assertEquals(2, jdbc.queryForObject("select count(*) from course", Integer.class));
+    }
+
+    @Test
+    void reactivationRejectsScheduleConflictWithoutChangingCanceledRegistration() throws Exception {
+        createPerson("01234567890", "Pessoa Exemplo");
+        long first = id(createCourse("Curso A"));
+        long second = id(createCourse("Curso B"));
+        createClass(first);
+        long registerId = id(createRegistration("01234567890", first));
+        String key = registrationKey("01234567890", first);
+        mvc.perform(delete("/api/register").contentType(APPLICATION_JSON).content(key))
+                .andExpect(status().isNoContent());
+        createRegistration("01234567890", second);
+        createClass(second);
+
+        mvc.perform(patch("/api/register/active").contentType(APPLICATION_JSON).content(key))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409));
+        mvc.perform(get("/api/register").contentType(APPLICATION_JSON).content(key))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(registerId))
+                .andExpect(jsonPath("$.status").value("CANCELED"));
+        assertEquals(2, jdbc.queryForObject("select count(*) from register", Integer.class));
+    }
+
+    @Test
+    void reactivationValidatesKeyAndReportsMissingRegistration() throws Exception {
+        for (String invalid : List.of(
+                "{}", "{\"personCpf\":\"abc\",\"courseOfInterestId\":1}",
+                "{\"personCpf\":\"01234567890\",\"courseOfInterestId\":0}",
+                "{\"personCpf\":\"01234567890\",\"courseOfInterestId\":-1}")) {
+            mvc.perform(patch("/api/register/active").contentType(APPLICATION_JSON).content(invalid))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        }
+        createPerson("01234567890", "Pessoa Exemplo");
+        long courseId = id(createCourse("Curso sem inscrição"));
+        mvc.perform(patch("/api/register/active").contentType(APPLICATION_JSON)
+                        .content(registrationKey("01234567890", courseId)))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404));
     }
 
     @Test
@@ -553,6 +614,219 @@ class ApiControllerTests {
     private ResultActions createPerson(String cpf, String name) throws Exception {
         return mvc.perform(post("/api/person").contentType(APPLICATION_JSON).content(personBody(cpf, name)))
                 .andExpect(status().isCreated());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"name", "description"})
+    void courseTextLimitsApplyToCreationAndPatchWithoutPartialChanges(String field) throws Exception {
+        String body = "{\"name\":\"Curso\",\"description\":\"Descrição\"}";
+        String accepted = JsonPath.parse(body).set("$." + field, "a".repeat(255)).jsonString();
+        long courseId = id(mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content(accepted))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$." + field).value("a".repeat(255))));
+        String rejected = JsonPath.parse(body).set("$." + field, "a".repeat(256)).jsonString();
+        mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content(rejected))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("O campo '" + field + "' deve ter no máximo 255 caracteres."));
+        mvc.perform(patch("/api/course").contentType(APPLICATION_JSON).content(
+                        "{\"courseId\":%d,\"%s\":\"%s\",\"start\":\"2026-10-01\"}"
+                                .formatted(courseId, field, "a".repeat(256))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        mvc.perform(get("/api/course")).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0]." + field).value("a".repeat(255)))
+                .andExpect(jsonPath("$[0].start").isEmpty());
+        mvc.perform(patch("/api/course").contentType(APPLICATION_JSON).content(
+                        "{\"courseId\":%d,\"%s\":\"%s\"}".formatted(courseId, field, "b".repeat(255))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$." + field).value("b".repeat(255)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"null", "\"\"", "\"   \""})
+    void courseRequiresNonblankNameOnCreation(String name) throws Exception {
+        mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("{\"name\":" + name + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("O campo 'name' é obrigatório."));
+        assertEquals(0, jdbc.queryForObject("select count(*) from course", Integer.class));
+    }
+
+    @Test
+    void courseDatesAreOptionalAndEqualDatesAreAccepted() throws Exception {
+        for (String dates : new String[]{"", ",\"start\":\"2026-10-01\"", ",\"finish\":\"2026-10-01\"",
+                ",\"start\":\"2026-10-01\",\"finish\":\"2026-10-01\""}) {
+            mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("{\"name\":\"Curso\"" + dates + "}"))
+                    .andExpect(status().isCreated());
+        }
+        assertEquals(4, jdbc.queryForObject("select count(*) from course", Integer.class));
+    }
+
+    @Test
+    void reversedDatesAreRejectedOnCreationAndAgainstOmittedPatchDates() throws Exception {
+        mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("""
+                {"name":"Inválido","start":"2026-11-01","finish":"2026-10-01"}
+                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("O campo 'finish' não pode ser anterior ao campo 'start'."));
+        assertEquals(0, jdbc.queryForObject("select count(*) from course", Integer.class));
+        long courseId = id(createCourse("Curso original"));
+        for (String changedDate : new String[]{"\"start\":\"2026-11-02\"", "\"finish\":\"2026-09-30\""}) {
+            mvc.perform(patch("/api/course").contentType(APPLICATION_JSON).content(
+                            "{\"courseId\":%d,\"name\":\"Não salvar\",%s}".formatted(courseId, changedDate)))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+            mvc.perform(get("/api/course/course/Curso original")).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.start").value("2026-10-01"))
+                    .andExpect(jsonPath("$.finish").value("2026-11-01"));
+        }
+        mvc.perform(patch("/api/course").contentType(APPLICATION_JSON).content(
+                        "{\"courseId\":%d,\"start\":\"2026-11-01\"}".formatted(courseId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.start").value("2026-11-01"));
+    }
+
+    @Test
+    void classSessionLimitAppliesToCreationAndPatch() throws Exception {
+        long courseId = id(createCourse("Curso"));
+        String body = """
+                {"day":"2026-10-01","session":"%s","start":"08:00:00","finish":"10:00:00","courseId":%d}
+                """;
+        mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content(body.formatted("s".repeat(256), courseId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("O campo 'session' deve ter no máximo 255 caracteres."));
+        assertEquals(0, jdbc.queryForObject("select count(*) from course_class", Integer.class));
+        long classId = id(mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON)
+                .content(body.formatted("s".repeat(255), courseId))).andExpect(status().isCreated()));
+        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON).content(
+                        "{\"classId\":%d,\"session\":\"%s\",\"day\":\"2026-10-02\"}".formatted(classId, "s".repeat(256))))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/courseClass/courseClass/{id}", courseId))
+                .andExpect(jsonPath("$[0].day").value("2026-10-01"))
+                .andExpect(jsonPath("$[0].session").value("s".repeat(255)));
+        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON).content(
+                        "{\"classId\":%d,\"session\":\"%s\"}".formatted(classId, "t".repeat(255))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.session").value("t".repeat(255)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"sem-arroba", "pessoa@dominio", "pessoa@@example.com", "pessoa @example.com", "pessoa@example..com", ""})
+    void invalidEmailRejectsCreationAndPatchWithoutSavingOtherFields(String email) throws Exception {
+        String body = JsonPath.parse(personBody("01234567890", "Pessoa")).set("$.email", email).jsonString();
+        mvc.perform(post("/api/person").contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("'email'")));
+        assertEquals(0, jdbc.queryForObject("select count(*) from person", Integer.class));
+        assertEquals(0, jdbc.queryForObject("select count(*) from address", Integer.class));
+        createPerson("01234567890", "Pessoa");
+        mvc.perform(patch("/api/person").contentType(APPLICATION_JSON).content(
+                        "{\"Cpf\":\"01234567890\",\"email\":\"%s\",\"socialName\":\"Não salvar\"}".formatted(email)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/person/person/01234567890"))
+                .andExpect(jsonPath("$.email").value("pessoa@example.com"))
+                .andExpect(jsonPath("$.socialName").isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"fullName", "cpf", "email", "personalPhone", "personalPhoneHasWhatsapp", "gender", "education", "workState", "address", "address.street", "address.neighborhood", "address.number"})
+    void missingRequiredPersonFieldsDoNotLeaveOrphanAddresses(String field) throws Exception {
+        for (String body : new String[]{
+                JsonPath.parse(personBody("01234567890", "Pessoa")).delete("$." + field).jsonString(),
+                JsonPath.parse(personBody("01234567890", "Pessoa")).set("$." + field, null).jsonString()}) {
+            mvc.perform(post("/api/person").contentType(APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.message").value("O campo '" + field + "' é obrigatório."));
+        }
+        assertEquals(0, jdbc.queryForObject("select count(*) from person", Integer.class));
+        assertEquals(0, jdbc.queryForObject("select count(*) from address", Integer.class));
+    }
+
+    @Test
+    void addressNumberZeroIsAcceptedButNegativeIsRejected() throws Exception {
+        String body = personBody("01234567890", "Pessoa");
+        mvc.perform(post("/api/person").contentType(APPLICATION_JSON)
+                        .content(JsonPath.parse(body).set("$.address.number", -1).jsonString()))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value(
+                        "O campo 'address.number' deve ser um inteiro maior ou igual a zero."));
+        assertEquals(0, jdbc.queryForObject("select count(*) from address", Integer.class));
+        mvc.perform(post("/api/person").contentType(APPLICATION_JSON)
+                        .content(JsonPath.parse(body).set("$.address.number", 0).jsonString()))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.address.number").value(0))
+                .andExpect(jsonPath("$.personalPhoneHasWhatsapp").value(false));
+    }
+
+    @Test
+    void partialAddressPatchPreservesOmittedFieldsAndUpdatesTheExistingAddress() throws Exception {
+        var created = createPerson("01234567890", "Pessoa");
+        long addressId = ((Number) JsonPath.read(created.andReturn().getResponse().getContentAsString(), "$.address.id")).longValue();
+        mvc.perform(patch("/api/person").contentType(APPLICATION_JSON).content("""
+                {"Cpf":"01234567890","address":{"street":"Rua Nova"}}
+                """))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.address.id").value(addressId))
+                .andExpect(jsonPath("$.address.number").value(42))
+                .andExpect(jsonPath("$.address.neighborhood").value("Centro"));
+        mvc.perform(patch("/api/person").contentType(APPLICATION_JSON).content(
+                        "{\"Cpf\":\"01234567890\",\"address\":{\"id\":%d,\"number\":0}}".formatted(addressId)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/person/person/01234567890"))
+                .andExpect(jsonPath("$.address.id").value(addressId))
+                .andExpect(jsonPath("$.address.street").value("Rua Nova"))
+                .andExpect(jsonPath("$.address.number").value(0))
+                .andExpect(jsonPath("$.address.neighborhood").value("Centro"));
+        assertEquals(1, jdbc.queryForObject("select count(*) from address", Integer.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"street\":\" \"}", "{\"neighborhood\":\"\"}", "{\"number\":-1}"})
+    void invalidAddressPatchPreservesAddressAndOtherPersonFields(String address) throws Exception {
+        createPerson("01234567890", "Pessoa");
+        mvc.perform(patch("/api/person").contentType(APPLICATION_JSON).content(
+                        "{\"Cpf\":\"01234567890\",\"email\":\"novo@example.com\",\"address\":%s}".formatted(address)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("'address.")));
+        mvc.perform(get("/api/person/person/01234567890"))
+                .andExpect(jsonPath("$.email").value("pessoa@example.com"))
+                .andExpect(jsonPath("$.address.street").value("Rua Exemplo"))
+                .andExpect(jsonPath("$.address.neighborhood").value("Centro"))
+                .andExpect(jsonPath("$.address.number").value(42));
+        assertEquals(1, jdbc.queryForObject("select count(*) from address", Integer.class));
+    }
+
+    @Test
+    void addressPatchCannotTakeOverAnotherPersonsAddress() throws Exception {
+        var first = createPerson("01234567890", "Pessoa A");
+        var second = createPerson("98765432100", "Pessoa B");
+        long firstAddress = ((Number) JsonPath.read(first.andReturn().getResponse().getContentAsString(), "$.address.id")).longValue();
+        long secondAddress = ((Number) JsonPath.read(second.andReturn().getResponse().getContentAsString(), "$.address.id")).longValue();
+        mvc.perform(patch("/api/person").contentType(APPLICATION_JSON).content(
+                        "{\"Cpf\":\"01234567890\",\"email\":\"novo@example.com\",\"address\":{\"id\":%d,\"street\":\"Não salvar\"}}".formatted(secondAddress)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value(
+                        "O campo 'address.id' não pode alterar o endereço vinculado à pessoa."));
+        mvc.perform(get("/api/person/person/01234567890"))
+                .andExpect(jsonPath("$.address.id").value(firstAddress))
+                .andExpect(jsonPath("$.email").value("pessoa@example.com"));
+        mvc.perform(get("/api/person/person/98765432100"))
+                .andExpect(jsonPath("$.address.id").value(secondAddress))
+                .andExpect(jsonPath("$.address.street").value("Rua Exemplo"));
+        assertEquals(2, jdbc.queryForObject("select count(*) from address", Integer.class));
+    }
+
+    @Test
+    void emptyOrNullAddressPatchKeepsStoredValues() throws Exception {
+        var person = createPerson("01234567890", "Pessoa");
+        long addressId = ((Number) JsonPath.read(person.andReturn().getResponse().getContentAsString(), "$.address.id")).longValue();
+        for (String address : new String[]{"null", "{}", "{\"number\":null,\"street\":null,\"neighborhood\":null}"}) {
+            mvc.perform(patch("/api/person").contentType(APPLICATION_JSON).content(
+                            "{\"Cpf\":\"01234567890\",\"address\":%s}".formatted(address)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.address.id").value(addressId))
+                    .andExpect(jsonPath("$.address.street").value("Rua Exemplo"))
+                    .andExpect(jsonPath("$.address.number").value(42))
+                    .andExpect(jsonPath("$.address.neighborhood").value("Centro"));
+        }
+    }
+
+    @Test
+    void blankCourseNamePatchCannotSaveOtherChanges() throws Exception {
+        long courseId = id(createCourse("Curso original"));
+        mvc.perform(patch("/api/course").contentType(APPLICATION_JSON).content(
+                        "{\"courseId\":%d,\"name\":\" \",\"description\":\"Não salvar\"}".formatted(courseId)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("O campo 'name' é obrigatório."));
+        mvc.perform(get("/api/course/course/Curso original")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("Introdução"));
     }
 
     private String personBody(String cpf, String name) {

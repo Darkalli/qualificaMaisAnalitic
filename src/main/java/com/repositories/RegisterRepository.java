@@ -17,6 +17,6 @@ public interface RegisterRepository extends JpaRepository<Register, Long> {
 
     boolean existsByPersonAndCourseOfInterest(Person person, Course course);
 
-    @Query("select distinct r.person.cpf from Register r where r.courseOfInterest.id = :courseId order by r.person.cpf")
+    @Query("select distinct r.person.cpf from Register r where r.courseOfInterest.id = :courseId and r.status = com.enums.StatusRegister.ACTIVE order by r.person.cpf")
     List<String> findPersonCpfsByCourseId(Long courseId);
 }

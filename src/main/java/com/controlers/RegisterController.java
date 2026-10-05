@@ -28,6 +28,12 @@ public class RegisterController {
         return ResponseEntity.status(HttpStatus.CREATED).body(registerService.addRegister(registerDto));
     }
 
+    @PatchMapping("/active")
+    public ResponseEntity<String> updateRegisterStatusToActive(@RequestBody SearchRegisterDto dto) {
+        String message = registerService.reactiveRegister(dto);
+        return ResponseEntity.ok(message);
+    }
+
     @DeleteMapping
     public ResponseEntity<Void> deleteRegister(@RequestBody SearchRegisterDto delete){
         registerService.deleteRegister(delete);

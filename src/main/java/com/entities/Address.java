@@ -25,7 +25,7 @@ public class Address {
     @Column(nullable = false, columnDefinition = "text")
     private String neighborhood;
 
-    public Address(int number, String street, String neighborhood) {
+    public Address(Integer number, String street, String neighborhood) {
         this.number = number;
         this.street = street;
         this.neighborhood = neighborhood;

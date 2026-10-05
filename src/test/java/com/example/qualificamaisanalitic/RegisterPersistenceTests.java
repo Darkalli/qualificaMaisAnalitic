@@ -2,6 +2,7 @@ package com.example.qualificamaisanalitic;
 
 import com.sheets.*;
 import com.entities.Register;
+import com.enums.StatusRegister;
 import com.entities.Course;
 import com.repositories.CourseRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -222,7 +223,7 @@ class RegisterPersistenceTests {
     void databaseRejectsDuplicateCourseForTheSamePerson() {
         var original = incoming("01234567890");
         persistence.persist(collection(original));
-        var duplicate = new Register(original.getPerson(), original.getCourseOfInterest(), original.getRegisterDate());
+        var duplicate = new Register(original.getPerson(), original.getCourseOfInterest(), original.getRegisterDate(), StatusRegister.ACTIVE);
         assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(duplicate));
         assertEquals(1, people.count());
         assertEquals(1, repository.count());

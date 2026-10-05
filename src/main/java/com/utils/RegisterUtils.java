@@ -4,6 +4,7 @@ import com.entities.Course;
 import com.entities.CourseClass;
 import com.entities.Register;
 import com.enums.StatusClass;
+import com.enums.StatusRegister;
 import com.repositories.RegisterRepository;
 
 import java.util.List;
@@ -18,7 +19,8 @@ public class RegisterUtils {
                 );
 
         for (Register register : registers) {
-            if (newRegister.getId() != null && newRegister.getId().equals(register.getId())) {
+            if (register.getStatus() != StatusRegister.ACTIVE
+                    || (newRegister.getId() != null && newRegister.getId().equals(register.getId()))) {
                 continue;
             }
             Course course = register.getCourseOfInterest();
@@ -35,6 +37,9 @@ public class RegisterUtils {
 
     public static boolean hasScheduleConflict(RegisterRepository repository, String cpf, CourseClass changedClass) {
         for (Register register : repository.findByPerson_Cpf(cpf)) {
+            if (register.getStatus() != StatusRegister.ACTIVE) {
+                continue;
+            }
             for (CourseClass existing : register.getCourseOfInterest().getCourseClass()) {
                 if (changedClass.getId() != null && changedClass.getId().equals(existing.getId())) {
                     continue;

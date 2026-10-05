@@ -278,6 +278,38 @@ class AuthControllerTests {
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"a", "á", "€", "🔐"})
+    void passwordByteLimitAcceptsSeventyTwoAndRejectsLongerValues(String character) throws Exception {
+        int bytesPerCharacter = character.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        String boundary = character.repeat(72 / bytesPerCharacter);
+        String oversized = boundary + "a";
+        assertEquals(72, boundary.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+        assertEquals(73, oversized.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+        String adminToken = createLogin(UserRole.ADMIN);
+        mvc.perform(post("/api/auth/register").header("Authorization", "Bearer " + adminToken)
+                        .contentType(APPLICATION_JSON).content(
+                                "{\"username\":\"boundary\",\"password\":\"%s\",\"role\":\"AGENT\"}".formatted(boundary)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.passwordHash").doesNotExist());
+        long sessionCount = sessions.count();
+        String rejected = login("boundary", oversized).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message").value("Usuário, senha ou token inválidos. Entre novamente."))
+                .andReturn().getResponse().getContentAsString();
+        assertFalse(rejected.contains(oversized));
+        assertEquals(sessionCount, sessions.count());
+        // Uma senha maior com os mesmos primeiros 72 bytes não pode autenticar por truncamento.
+        login("boundary", boundary).andExpect(status().isOk());
+        assertEquals(sessionCount + 1, sessions.count());
+        mvc.perform(post("/api/auth/register").header("Authorization", "Bearer " + adminToken)
+                        .contentType(APPLICATION_JSON).content(
+                                "{\"username\":\"oversized\",\"password\":\"%s\",\"role\":\"AGENT\"}".formatted(oversized)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("A senha deve ter pelo menos 8 caracteres e no máximo 72 bytes em UTF-8."));
+        assertEquals(2, users.count());
+        assertTrue(users.findByUsername("oversized").isEmpty());
+    }
+
     private String createLogin(UserRole role) throws Exception {
         userService.addUser(new AddUserDto("operator", PASSWORD, role));
         return token(login("operator", PASSWORD).andExpect(status().isOk()));

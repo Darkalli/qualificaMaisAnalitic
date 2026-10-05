@@ -1,5 +1,6 @@
 package com.sheets.services;
 
+import com.enums.StatusRegister;
 import com.sheets.RegisterImportResult;
 import com.sheets.SheetImportResult;
 import com.entities.Register;
@@ -82,6 +83,7 @@ public class RegisterPersistenceService {
                             "Não é possível se inscrever em cursos com horários conflitantes."
                     );
                 }
+                incoming.setStatus(StatusRegister.ACTIVE);
                 repository.save(incoming);
                 inserted++;
                 if (!fields.isEmpty()) {

@@ -4,6 +4,9 @@ import com.dtos.presenceDtos.*;
 import com.entities.Course;
 import com.entities.CourseClass;
 import com.entities.Presence;
+import com.entities.Register;
+import com.enums.StatusRegister;
+import com.exceptions.ConflictException;
 import com.enums.PresenceStatus;
 import com.repositories.CourseClassRepository;
 import com.repositories.PersonRepository;
@@ -51,7 +54,8 @@ class PresenceServiceTests {
         var courseClass = courseClass(course);
         when(people.findByIdForUpdate(7L)).thenReturn(Optional.of(person));
         when(classes.findById(3L)).thenReturn(Optional.of(courseClass));
-        when(registers.existsByPersonAndCourseOfInterest(person, course)).thenReturn(true);
+        when(registers.findByPerson_CpfAndCourseOfInterest_Id(person.getCpf(), course.getId()))
+                .thenReturn(Optional.of(new Register(person, course, DAY, StatusRegister.ACTIVE)));
         service.addPresence(new AddPresenceDto(7L, 3L, PresenceStatus.PRESENT));
         var capture = ArgumentCaptor.forClass(Presence.class);
         verify(presences).save(capture.capture());
@@ -71,7 +75,8 @@ class PresenceServiceTests {
         var courseClass = courseClass(new Course());
         when(people.findByIdForUpdate(7L)).thenReturn(Optional.of(person));
         when(classes.findById(3L)).thenReturn(Optional.of(courseClass));
-        when(registers.existsByPersonAndCourseOfInterest(person, courseClass.getCourse())).thenReturn(true);
+        when(registers.findByPerson_CpfAndCourseOfInterest_Id(person.getCpf(), courseClass.getCourse().getId()))
+                .thenReturn(Optional.of(new Register(person, courseClass.getCourse(), DAY, StatusRegister.ACTIVE)));
         when(presences.existsByPersonAndCourseClass(person, courseClass)).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class,
@@ -86,9 +91,10 @@ class PresenceServiceTests {
         var course = new Course();
         when(people.findByIdForUpdate(7L)).thenReturn(Optional.of(person));
         when(classes.findById(3L)).thenReturn(Optional.of(courseClass(course)));
-        when(registers.existsByPersonAndCourseOfInterest(person, course)).thenReturn(false);
+        when(registers.findByPerson_CpfAndCourseOfInterest_Id(person.getCpf(), course.getId()))
+                .thenReturn(Optional.empty());
 
-        var error = assertThrows(IllegalArgumentException.class,
+        var error = assertThrows(ConflictException.class,
                 () -> service.addPresence(new AddPresenceDto(7L, 3L, PresenceStatus.PRESENT)));
 
         assertEquals("A pessoa não possui inscrição no curso desta aula.", error.getMessage());
@@ -141,6 +147,25 @@ class PresenceServiceTests {
         when(classes.findCourseIdById(3L)).thenReturn(Optional.empty());
         assertThrows(EntityNotFoundException.class,
                 () -> service.addPresence(new AddPresenceDto(7L, 3L, PresenceStatus.PRESENT)));
+        verifyNoInteractions(presences);
+    }
+
+    @Test
+    void rejectsAttendanceForCanceledRegistrationWithoutSaving() {
+        var person = ServiceTestData.person();
+        var course = new Course();
+        var courseClass = courseClass(course);
+        var registration = new Register(person, course, DAY, StatusRegister.CANCELED);
+        when(people.findByIdForUpdate(7L)).thenReturn(Optional.of(person));
+        when(classes.findById(3L)).thenReturn(Optional.of(courseClass));
+        when(registers.findByPerson_CpfAndCourseOfInterest_Id(person.getCpf(), course.getId()))
+                .thenReturn(Optional.of(registration));
+
+        var error = assertThrows(ConflictException.class,
+                () -> service.addPresence(new AddPresenceDto(7L, 3L, PresenceStatus.PRESENT)));
+
+        assertEquals("A pessoa possui inscrição cancelada no curso desta aula.", error.getMessage());
+        assertEquals(StatusRegister.CANCELED, registration.getStatus());
         verifyNoInteractions(presences);
     }
 

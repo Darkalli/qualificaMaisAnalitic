@@ -4,6 +4,7 @@ import com.entities.Course;
 import com.entities.CourseClass;
 import com.entities.Presence;
 import com.entities.Register;
+import com.enums.StatusRegister;
 import com.enums.PresenceStatus;
 import com.repositories.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -60,7 +61,7 @@ class ConcurrentPersistenceTests {
                                 + " where " + filter + " = ?", Integer.class, targetId));
                         awaitBothWriters(readyToWrite);
                         if (table.equals("register")) {
-                            registers.saveAndFlush(new Register(person, course, day));
+                            registers.saveAndFlush(new Register(person, course, day, StatusRegister.ACTIVE));
                         } else if (table.equals("presence")) {
                             presences.saveAndFlush(new Presence(person, courseClass, course, PresenceStatus.PRESENT));
                         } else {
