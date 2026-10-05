@@ -109,9 +109,10 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | POST | `/api/register` | `AddRegisterDto`: `personCpf`, `courseOfInterestId` e `registerDate`. | 201 + inscrição |
 | GET | `/api/register/register/{cpf}` | Lista inscrições do CPF, aceitando máscara. | 200 + lista |
 | GET | `/api/register` | **Corpo JSON** com `personCpf` e `courseOfInterestId`. | 200 + inscrição |
-| DELETE | `/api/register` | Mesmo corpo da busca específica. | 204 sem corpo |
+| DELETE | `/api/register` | Mesmo corpo da busca específica; cancela sem excluir a inscrição ou presenças. | 204 sem corpo |
+| PATCH | `/api/register/active` | `SearchRegisterDto`: `personCpf` e `courseOfInterestId`; reativa após validar horários. | 200 + mensagem de texto |
 
-As consultas de presenças por aula/curso e de inscrição por CPF/curso usam `@RequestBody` em GET. Os parâmetros na URL não substituem o corpo obrigatório. A exclusão de inscrição também exige corpo JSON. A API declara 22 endpoints de negócio e cinco de autenticação.
+As consultas de presenças por aula/curso e de inscrição por CPF/curso usam `@RequestBody` em GET. Os parâmetros na URL não substituem o corpo obrigatório. A exclusão de inscrição também exige corpo JSON. A API declara 23 endpoints de negócio e cinco de autenticação.
 
 ### Exemplos de entrada
 
@@ -179,7 +180,11 @@ Inscrição (`POST /api/register`), usando pessoa e curso existentes:
 {"personCpf":"01234567890","courseOfInterestId":42,"registerDate":"2026-10-01"}
 ```
 
-O serviço de inscrição normaliza CPF nas quatro operações, aceitando máscara e removendo caracteres não numéricos antes de validar 11 dígitos. GET e DELETE em `/api/register` recebem `{"personCpf":"01234567890","courseOfInterestId":42}`. Não existe PATCH de inscrição.
+O serviço de inscrição normaliza CPF, aceitando máscara e removendo caracteres não numéricos antes de validar 11 dígitos. GET e DELETE em `/api/register` recebem `{"personCpf":"01234567890","courseOfInterestId":42}`. POST cria inscrição ACTIVE; DELETE define CANCELED, preservando identidade, data e presenças. Consultas continuam incluindo canceladas. PATCH `/api/register/active` recebe a mesma chave e reativa apenas se não houver conflito de horários; conflito retorna 409 sem alterar o status. Inscrição já ativa retorna 200 com `Estado do registro já está como ativo`; reativação bem-sucedida retorna 200 com `Estado do registro atualizado com sucesso`. Cancelar novamente retorna 204 sem mudar o registro.
+
+Cancelamento e reativação executam em transação: curso com lock de leitura → pessoa com lock de escrita → consulta da inscrição → validação e gravação. Presença e inscrição compartilham a ordem; alterações de aula bloqueiam curso para escrita antes das pessoas. A checagem de horários ignora inscrições canceladas e a própria identidade; a validação de aulas seleciona apenas inscritos ativos. Presença sem inscrição ou com inscrição cancelada retorna 409.
+
+Mudança de CPF/curso na planilha é tratada como nova combinação por decisão do usuário, sem alterar/apagar a inscrição antiga. CPF existente reutiliza pessoa; CPF novo cria pessoa. A mesma combinação não duplica nem reativa inscrição cancelada automaticamente. Novas combinações continuam sujeitas à unicidade e aos conflitos de horário.
 
 ### Respostas e limites atuais
 
@@ -206,7 +211,9 @@ Erros de integridade conhecidos do banco são traduzidos sem expor SQL, valores 
 
 Para conferir sem cadastrar dados, execute `GET /api/person/person/123`: a resposta esperada é `400` com `{"status":400,"message":"CPF deve conter 11 dígitos."}`. A suíte `ApiControllerTests` verifica as respostas com serviços e banco; `ApiExceptionHandlerTests` simula falhas inesperadas e de bloqueio.
 
-Ainda não há validação completa dos campos com Bean Validation. As obrigatoriedades existentes foram preservadas; não foram acrescentadas regras de e-mail, dígitos verificadores de CPF ou novas exigências para cursos. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
+`ValidationUtils` centraliza campos obrigatórios, IDs positivos, formato básico de e-mail, endereço e datas. Curso exige nome preenchido; nome e descrição aceitam até 255 caracteres, assim como a sessão da aula. As datas do curso são opcionais; quando ambas existem, o fim não pode anteceder o início. PATCH valida a combinação dos valores enviados com os atuais antes de salvar. CPF mantém apenas a limpeza e a exigência de 11 dígitos, sem dígitos verificadores. A busca singular de curso por nome exige que o nome identifique apenas um resultado, embora o banco permita nomes repetidos.
+
+No cadastro de pessoa, endereço exige rua, bairro e número inteiro não negativo; zero é permitido. No PATCH, campos omitidos ou nulos preservam os valores atuais, inclusive o número. O ID do endereço não pode ser trocado. `Address.number` e seu construtor usam `Integer` para que a leitura do JSON preserve a diferença entre zero e omissão. E-mail é validado tanto na API quanto na leitura da planilha; isso não verifica se a caixa postal existe. Cadastro e login recusam senhas acima de 72 bytes UTF-8, inclusive com acentos ou emojis.
 
 Os endpoints de negócio exigem Bearer válido; ADMIN e AGENT têm acesso igual. O endereço é recebido com a pessoa e não possui endpoints independentes. A inscrição direta e a importação compartilham a checagem de horários. Presença exige inscrição no curso da aula; a unicidade pessoa/aula é garantida pela V1.
 
@@ -263,7 +270,7 @@ O serviço de persistência recebe inscrições com pessoa e endereço novos, co
 
 ### Preparar o PostgreSQL
 
-Para uma instalação nova, crie um banco vazio e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica V1 (estrutura inicial), V2 (sessão/horários obrigatórios), V3 (horários `TIME` e status da aula) e `V4__users_and_auth_sessions.sql` (usuários e sessões de login). A V4 acrescenta duas tabelas e preserva os cadastros existentes. O Hibernate valida a estrutura (`ddl-auto=validate`).
+Para uma instalação nova, crie um banco vazio e configure seu acesso no `application.properties` local. O usuário do banco precisa poder executar as migrações. Ao iniciar o Spring, o Flyway aplica V1 (estrutura inicial), V2 (sessão/horários obrigatórios), V3 (horários `TIME` e status da aula), V4 (usuários/sessões de login) e `V5__register_status.sql` (status de inscrição). V5 acrescenta `VARCHAR(32) DEFAULT ACTIVE NOT NULL` com CHECK ACTIVE/CANCELED, preenche as inscrições existentes como ACTIVE e preserva IDs, datas e presenças. V1–V4 permanecem intactas. O Hibernate valida a estrutura (`ddl-auto=validate`).
 
 Em um banco que já tem a V1 consolidada, a V2 preserva dados e IDs, mas exige corrigir previamente aulas com sessão/horários nulos. A migração falha se encontrar esses dados; não preenche valores nem exclui aulas automaticamente. As anotações JPA são `@Column(nullable=false)` nos campos simples; a FK continua em `CourseClass.course`, e a coleção inversa em `Course` usa somente `mappedBy`.
 
@@ -271,7 +278,7 @@ O histórico anterior foi consolidado durante o desenvolvimento, quando seus dad
 
 A configuração compartilhada fica em `src/main/resources/application.yaml`; as credenciais continuam no `.properties` local. Todos os enums são persistidos pelo nome. Inscrição, pessoa e endereço têm IDs automáticos. O endereço é gravado por cascata com a pessoa, e o serviço associa a pessoa persistida à inscrição na mesma transação.
 
-Novas alterações devem evoluir com V4 e seguintes, sem modificar migrações já aplicadas.
+Novas alterações devem evoluir com V6 e seguintes, sem modificar migrações já aplicadas.
 
 Para importar usando outro componente Spring, injete `RegisterImportService`:
 
@@ -319,7 +326,7 @@ As deficiências são um `Set<Disabilities>`, sem duplicatas. Exemplos de célul
 
 As deficiências pertencem à pessoa. O mapeamento JPA usa `person_disabilities`, com `person_id` e `disability`, guardando o nome de cada enum. A combinação das duas colunas é única e a V1 já cria essa estrutura. O uso de `@ElementCollection` com `@Enumerated(EnumType.STRING)` segue a [documentação de Jakarta Persistence](https://jakarta.ee/specifications/platform/9.1/apidocs/jakarta/persistence/enumerated.html).
 
-Formate a coluna CPF como texto no Sheets para preservar zeros à esquerda. A coleta valida o formato e remove a máscara; não verifica os dígitos verificadores. O número do endereço segue o `int` do modelo atual, portanto `s/n` e `12A` geram erro. A data/hora é convertida para `LocalDate`, descartando o horário.
+Formate a coluna CPF como texto no Sheets para preservar zeros à esquerda. A coleta valida o formato e remove a máscara; não verifica os dígitos verificadores. O número do endereço deve ser um inteiro não negativo de até 2147483647; `s/n` e `12A` geram erro. A data/hora é convertida para `LocalDate`, descartando o horário.
 
 ## Configuração local e Git
 
@@ -390,16 +397,16 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 .\mvnw.cmd test
 ```
 
-O perfil `test` usa dados fictícios, H2 em memória, Flyway e validação de schema; coleta Google desabilitada. Não acessa o banco de trabalho. Resultado de 02/10/2026: **341 testes aprovados em H2 e PostgreSQL 18.6 isolado**, sem falhas, erros ou ignorados. Logs: `target/auth-h2-tests.log` e `target/auth-postgres-tests.log`.
+O perfil `test` usa dados fictícios, H2 em memória, Flyway e validação de schema; coleta Google e bootstrap desabilitados. Não acessa o banco de trabalho. Resultado atual de 05/10/2026: **427 testes aprovados em H2 e 427 em PostgreSQL 18.6 isolado**, sem falhas, erros ou ignorados, incluindo V5 e ciclo de inscrições. Logs: `target/register-status-fix-full-h2.log` e `target/register-status-fix-full-postgres.log`; resumos agregados com os mesmos prefixos em JSON. Cópia fiel sem privados: `target/register-fix-validation-20261005-152325`, Java/SQL conferidos com o original por SHA-256. PostgreSQL temporário encerrado; banco de trabalho não alterado. Os resultados anteriores de 390 referem-se à base histórica sem status de inscrição.
 
 | Área | Cobertura |
 | --- | --- |
-| Autenticação | 22 casos HTTP com Bearer real, relógio controlado, expiração/renovação/logout, perfis com acesso igual e rotação simultânea; 3 casos de cadastro inicial e 2 da migração V4. |
-| API e serviços | 39 casos em `ApiControllerTests` para os 22 endpoints e 6 em `ApiExceptionHandlerTests`; sucesso, erros 400/404/405/409/415/500, dados obrigatórios, histórico e rollback. |
+| Autenticação | 29 casos HTTP com Bearer real, relógio controlado, expiração/renovação/logout, perfis com acesso igual, rotação simultânea, token expirado em rotas públicas e limite de senha em bytes; 3 casos de cadastro inicial e 2 da migração V4. |
+| API e serviços | 82 casos em `ApiControllerTests` para os 23 endpoints e 6 em `ApiExceptionHandlerTests`; sucesso, erros 400/404/405/409/415/500, dados obrigatórios, limites de texto, datas, e-mail, PATCH parcial de endereço, histórico e rollback. |
 | Importação | Reimportação, divergências, dados preservados, horários por ID de curso, conflitos existentes/entre linhas e rollback do lote, endereço e deficiências. |
 | Regras de aula | `ClassScheduleLifecycleTests`: 15 casos de criação após inscrição, reagendamento, validação de horários, cancelamento/adiamento, reativação e proteção de presenças. |
-| Concorrência | Unicidade de pessoa/curso, pessoa/aula e curso/dia; 11 casos de inscrição API/Sheets e 12 casos de lotes em ordem inversa, mudanças de aula versus inscrição e cancelamento versus presença. |
-| Migrações | V1 inicial, V2 campos obrigatórios e cinco casos da V3: conversão para hora, status inicial, IDs/dados preservados, reexecução e restrições SQL. |
+| Concorrência | Unicidade de pessoa/curso, pessoa/aula e curso/dia; 11 casos de inscrição API/Sheets e 12 casos de lotes em ordem inversa/mudanças de aula e seis novos casos de cancelamento × presença, reativação × inscrição e reativação × mudança de aula, nas duas ordens. |
+| Migrações | V1 inicial, V2 campos obrigatórios, cinco casos da V3, dois da V4 e três da V5; conversão, padrões, IDs/dados/presenças preservados, reexecução e restrições SQL. |
 | Validação | CPF conforme limpeza definida, telefones, deficiências, campos omitidos, mapper, coleta/scheduler simulados e contexto Spring. |
 
 As verificações de concorrência usam transações independentes e conferem o estado confirmado. A suíte não equivale a teste de carga ou validação operacional do servidor. CPF é normalizado por quantidade de dígitos, sem cálculo de dígitos verificadores.
@@ -415,7 +422,7 @@ Para apenas API, autenticação ou os fluxos de aula:
 Também é possível usar PostgreSQL exclusivo para testes, criado previamente e inicialmente vazio:
 
 ```powershell
-.\mvnw.cmd test "-Dtest.db.url=jdbc:postgresql://127.0.0.1:55449/class_flow_tests" "-Dtest.db.driver=org.postgresql.Driver" "-Dtest.db.username=class_test"
+.\mvnw.cmd test "-Dtest.db.url=jdbc:postgresql://127.0.0.1:55453/validation_tests" "-Dtest.db.driver=org.postgresql.Driver" "-Dtest.db.username=validation_test"
 ```
 
 A porta e o banco são exemplos; o servidor usado na validação foi encerrado. Senha opcional por `TEST_DB_PASSWORD`. Os testes removem registros e criam schemas temporários: nunca apontar para banco de trabalho.

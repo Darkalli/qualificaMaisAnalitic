@@ -91,7 +91,7 @@ Para executar apenas os testes da API:
 
 ## Estado atual
 
-Inscrição, importação e alteração de aulas verificam conflitos com bloqueios transacionais. Lotes bloqueiam cursos e pessoas em ordem fixa. Presença exige inscrição e aula ativa. Cancelamento preserva o histórico; aulas canceladas/adiadas não ocupam horário para inscrições. Erros da API têm tratamento centralizado. Autenticação com token implementada; restrições diferentes por perfil e validações restantes ficam para depois. As respostas de negócio usam entidades JPA diretamente; autenticação retorna DTOs sem senha/hash.
+Inscrição, importação e alteração de aulas verificam conflitos com bloqueios transacionais. Lotes bloqueiam cursos e pessoas em ordem fixa. Presença exige inscrição e aula ativa. Cancelamento preserva o histórico; aulas canceladas/adiadas não ocupam horário para inscrições. Erros da API têm tratamento centralizado. Campos obrigatórios, IDs positivos, e-mail, limites de texto e intervalo de datas são validados nos serviços. PATCH de endereço preserva campos omitidos e o vínculo atual. Autenticação com token implementada; restrições diferentes por perfil ficam para depois. As respostas de negócio usam entidades JPA diretamente; autenticação retorna DTOs sem senha/hash.
 
 A criação e a edição de aulas consultam duplicidade por curso/dia, considerando a própria aula e campos omitidos. A V1 também garante curso/dia obrigatórios e únicos no banco, inclusive em gravações simultâneas. Veja os [detalhes da regra de aulas](docs/guia-tecnico.md#uma-aula-por-curso-e-dia).
 
