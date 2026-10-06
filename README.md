@@ -52,10 +52,10 @@ Consulte as [rotas completas e exemplos](docs/guia-tecnico.md#api-http): algumas
 ## Importação do Google Sheets
 
 1. Importe o [modelo de planilha](docs/modelo-cadastros.csv), usando `;` como separador.
-2. Cadastre os cursos no sistema e preencha a coluna **ID do curso** com o ID correspondente.
+2. Cadastre os cursos no sistema. Preencha **ID do curso** diretamente ou use o catálogo automático na aba **Cursos** para obter o ID pelo nome.
 3. Habilite a API Google Sheets e salve as credenciais OAuth de aplicativo desktop em `src/main/resources/credentials.json`.
 4. Configure `app.sheets.spreadsheet-id` e `app.sheets.range` no arquivo local. O intervalo deve começar no cabeçalho, por exemplo `'Cadastros'!A1:Z`.
-5. Execute `com.SheetsQuickstart` pela IDE e autorize o acesso no navegador. Essa execução apenas lê e valida, sem gravar no banco.
+5. Execute `com.SheetsQuickstart` pela IDE com `--authorize` para autorizar o acesso no navegador. Depois, execute sem esse argumento para ler e validar, sem gravar no banco.
 
 Para importar automaticamente, configure e reinicie a aplicação:
 
@@ -64,6 +64,8 @@ app.sheets.check-enabled=true
 app.sheets.check-interval=5m
 app.sheets.check-initial-delay=10s
 ```
+
+**Catálogo opcional:** o backend pode publicar nomes e IDs em **Cursos!A:B** após alterações nos cursos, com reconciliação periódica e repetição após falhas. Fica desabilitado por padrão; exige autorização de escrita. Com nome em Q e ID calculado em S, use o cabeçalho **ID do curso** em S1 e a fórmula `=SE(Q2=""; ""; PROCV(Q2; Cursos!A:B; 2; FALSO))` em S2. Veja a [configuração e os cuidados de ativação](docs/guia-tecnico.md#catálogo-automático-de-cursos).
 
 **Regras principais:**
 

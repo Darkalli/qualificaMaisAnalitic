@@ -99,6 +99,7 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | GET | `/api/course/course/{name}` | Busca um curso pelo nome exato. | 200 + curso |
 | DELETE | `/api/course/course/{id}` | Exclui pelo ID do curso. | 204 sem corpo |
 | POST | `/api/courseClass` | `AddCourseClassDto`: dia, sessão, horários e `courseId` do curso existente. | 201 + turma |
+| POST | `/api/courseClass/courseClass/batch` | `AddCourseClassInBatchDto`: lista `day`, sessão, horários e `courseId`; cadastra todas as aulas em uma transação. | 201 + lista de aulas |
 | PATCH | `/api/courseClass` | `UpdateCourseClassDto`: `classId` e campos a atualizar. | 200 + turma |
 | GET | `/api/courseClass/courseClass/{courseId}` | Lista turmas de um curso existente. | 200 + lista |
 | DELETE | `/api/courseClass/courseClass/{id}` | Cancela a aula pelo ID, preservando o histórico. | 204 sem corpo |
@@ -108,11 +109,11 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | GET | `/api/presence` | **Corpo JSON** com `courseId` e `courseClassId`; filtra as presenças. | 200 + lista |
 | POST | `/api/register` | `AddRegisterDto`: `personCpf`, `courseOfInterestId` e `registerDate`. | 201 + inscrição |
 | GET | `/api/register/register/{cpf}` | Lista inscrições do CPF, aceitando máscara. | 200 + lista |
-| GET | `/api/register` | **Corpo JSON** com `personCpf` e `courseOfInterestId`. | 200 + inscrição |
-| DELETE | `/api/register` | Mesmo corpo da busca específica; cancela sem excluir a inscrição ou presenças. | 204 sem corpo |
+| GET | `/api/register/register/{cpf}/{courseId}` | CPF e ID do curso no caminho; sem corpo JSON. | 200 + inscrição |
+| DELETE | `/api/register` | Corpo JSON com `personCpf` e `courseOfInterestId`; cancela sem excluir a inscrição ou presenças. | 204 sem corpo |
 | PATCH | `/api/register/active` | `SearchRegisterDto`: `personCpf` e `courseOfInterestId`; reativa após validar horários. | 200 + mensagem de texto |
 
-As consultas de presenças por aula/curso e de inscrição por CPF/curso usam `@RequestBody` em GET. Os parâmetros na URL não substituem o corpo obrigatório. A exclusão de inscrição também exige corpo JSON. A API declara 23 endpoints de negócio e cinco de autenticação.
+A consulta de inscrição por CPF/curso usa duas variáveis obrigatórias no caminho e não recebe corpo; no Swagger, preencha `cpf` e `courseId`. O antigo GET `/api/register` retorna 405; clientes devem usar a nova rota. DELETE `/api/register` e PATCH `/api/register/active` continuam recebendo JSON. A consulta de presenças por aula/curso permanece com corpo em GET, uma limitação separada para clientes de navegador.
 
 ### Exemplos de entrada
 
@@ -162,6 +163,29 @@ Turma (`POST /api/courseClass`), substituindo `42` pelo ID retornado no cadastro
 
 Na criação, envie `courseId` diretamente; o formato antigo `course: {"id": ...}` não preenche esse campo. ID ausente retorna 400; ID não encontrado retorna 404. O PATCH de aula continua usando `course: {"id": ...}` quando houver troca de curso. Horários usam texto `HH:mm:ss`.
 
+### Aulas em lote
+
+`POST /api/courseClass/courseClass/batch`, com Bearer e `Content-Type: application/json`:
+
+```json
+{
+  "day": ["2026-10-01", "2026-10-03", "2026-10-05"],
+  "session": "Manhã",
+  "start": "08:00:00",
+  "finish": "10:00:00",
+  "courseId": 42
+}
+```
+
+Substitua `42` por um curso existente. O nome do campo é `day`, embora receba uma lista. Sessão, horários e curso são compartilhados por todas as datas. Sucesso retorna 201 com a lista de aulas salvas, IDs e status `ACTIVE`, na ordem enviada.
+
+- Lista ausente, nula, vazia ou com elementos nulos retorna 400. Também são inválidos datas malformadas, IDs não positivos e início maior ou igual ao fim; sessão é obrigatória e limitada a 255 caracteres.
+- Curso positivo inexistente retorna 404.
+- Data repetida no lote, aula já existente para o curso/dia ou conflito de horários de uma pessoa inscrita retorna 409.
+- O lote é **atômico**: qualquer falha desfaz todas as aulas dessa requisição, mesmo que ocorra depois da primeira data. Aulas existentes antes da requisição são preservadas; não há sucesso parcial.
+
+Cadastro e rollback foram comprovados em H2 e PostgreSQL 18.6 isolados; detalhes da execução estão na seção de testes e em `docs/desenvolvimento/TESTES.md`.
+
 O Swagger fica em `/swagger-ui/index.html`, e a especificação em `/v3/api-docs`. O projeto usa springdoc 3.1.1, da linha compatível com Spring Boot 4 segundo a [documentação oficial](https://springdoc.org/). Os testes verificam a disponibilidade da UI e o schema de criação de aula com `courseId` e horários como strings.
 
 Presença (`POST /api/presence`), usando IDs existentes de pessoa e aula:
@@ -180,7 +204,7 @@ Inscrição (`POST /api/register`), usando pessoa e curso existentes:
 {"personCpf":"01234567890","courseOfInterestId":42,"registerDate":"2026-10-01"}
 ```
 
-O serviço de inscrição normaliza CPF, aceitando máscara e removendo caracteres não numéricos antes de validar 11 dígitos. GET e DELETE em `/api/register` recebem `{"personCpf":"01234567890","courseOfInterestId":42}`. POST cria inscrição ACTIVE; DELETE define CANCELED, preservando identidade, data e presenças. Consultas continuam incluindo canceladas. PATCH `/api/register/active` recebe a mesma chave e reativa apenas se não houver conflito de horários; conflito retorna 409 sem alterar o status. Inscrição já ativa retorna 200 com `Estado do registro já está como ativo`; reativação bem-sucedida retorna 200 com `Estado do registro atualizado com sucesso`. Cancelar novamente retorna 204 sem mudar o registro.
+O serviço de inscrição normaliza CPF, aceitando máscara e removendo caracteres não numéricos antes de validar 11 dígitos. A consulta singular é `GET /api/register/register/01234567890/42`, sem corpo; retorna 200 com a inscrição ou 404 quando a combinação não existe. CPF/ID inválidos retornam 400. A listagem por CPF continua em `GET /api/register/register/{cpf}`. DELETE `/api/register` recebe `{"personCpf":"01234567890","courseOfInterestId":42}`. POST cria inscrição ACTIVE; DELETE define CANCELED, preservando identidade, data e presenças. Consultas continuam incluindo canceladas. PATCH `/api/register/active` recebe a mesma chave JSON e reativa apenas se não houver conflito de horários; conflito retorna 409 sem alterar o status. Inscrição já ativa retorna 200 com `Estado do registro já está como ativo`; reativação bem-sucedida retorna 200 com `Estado do registro atualizado com sucesso`. Cancelar novamente retorna 204 sem mudar o registro.
 
 Cancelamento e reativação executam em transação: curso com lock de leitura → pessoa com lock de escrita → consulta da inscrição → validação e gravação. Presença e inscrição compartilham a ordem; alterações de aula bloqueiam curso para escrita antes das pessoas. A checagem de horários ignora inscrições canceladas e a própria identidade; a validação de aulas seleciona apenas inscritos ativos. Presença sem inscrição ou com inscrição cancelada retorna 409.
 
@@ -314,7 +338,15 @@ Importe [modelo-cadastros.csv](modelo-cadastros.csv) no Google Sheets usando `;`
 
 Como regra inicial, todos os campos acima são obrigatórios, exceto nome social e contato de familiar. Cabeçalhos e descrições dos enums ignoram maiúsculas, acentos, espaços e pontuação. Também são aceitos os nomes Java dos campos e aliases como `Carimbo de data/hora`, `Endereço de e-mail` e `Logradouro`. Para títulos diferentes do formulário, acrescente aliases em `RegisterSheetMapper.Column`.
 
-Na coluna `ID do curso`, informe, por exemplo, `42` se esse for o ID do curso desejado no banco. Os cabeçalhos `courseId`, `Curso de interesse` e `courseOfInterest` continuam aceitos como aliases, mas o conteúdo agora deve ser o ID, não o nome. Atualize as respostas existentes e a origem do formulário para fornecer esse valor. Não são aceitos zero, negativos, casas decimais, notação científica ou nomes. `collect()` e o Quickstart validam apenas o formato e retornam uma referência `Course` contendo o ID; a existência do curso é verificada por `importRegisters()` ao acessar o banco.
+Na coluna `ID do curso`, informe, por exemplo, `42` se esse for o ID do curso desejado no banco. Também são aceitos `courseId` e `courseOfInterestId`. Quando existe uma coluna explícita de ID, ela prevalece sobre `Curso de interesse`/`courseOfInterest`, que pode conter o nome escolhido no formulário. Sem a coluna explícita, esses dois cabeçalhos antigos continuam aceitos, mas seu conteúdo deve ser o ID, não o nome. Um ID explícito vazio ou inválido não usa o valor da coluna de nome como alternativa. Não são aceitos zero, negativos, casas decimais, notação científica ou nomes no campo de ID. `collect()` e o Quickstart validam apenas o formato e retornam uma referência `Course` contendo o ID; a existência do curso é verificada por `importRegisters()` ao acessar o banco.
+
+Para o layout com nome do curso em **Q** e ID calculado em **S**, use o cabeçalho `Curso de interesse` em Q1 e `ID do curso` em S1. O intervalo de leitura deve incluir a coluna S. Com o catálogo na aba `Cursos` (A = nome, B = ID), a fórmula de S2 é:
+
+```excel
+=SE(Q2=""; ""; PROCV(Q2; Cursos!A:B; 2; FALSO))
+```
+
+Aplique a fórmula às linhas de inscrição necessárias. O backend lê o resultado calculado, não a expressão da fórmula. Um nome sem correspondência gera erro de ID na importação, em vez de selecionar outro curso silenciosamente.
 
 O formulário também pode usar `Endereço (rua)`, `Trabalha atualmente?` e `Data da inscrição`. Quando a data de inscrição e o carimbo de data/hora existem juntos, a data de inscrição prevalece. O carimbo só é usado quando não existe uma coluna específica de data de inscrição/cadastro.
 
@@ -327,6 +359,37 @@ As deficiências são um `Set<Disabilities>`, sem duplicatas. Exemplos de célul
 As deficiências pertencem à pessoa. O mapeamento JPA usa `person_disabilities`, com `person_id` e `disability`, guardando o nome de cada enum. A combinação das duas colunas é única e a V1 já cria essa estrutura. O uso de `@ElementCollection` com `@Enumerated(EnumType.STRING)` segue a [documentação de Jakarta Persistence](https://jakarta.ee/specifications/platform/9.1/apidocs/jakarta/persistence/enumerated.html).
 
 Formate a coluna CPF como texto no Sheets para preservar zeros à esquerda. A coleta valida o formato e remove a máscara; não verifica os dígitos verificadores. O número do endereço deve ser um inteiro não negativo de até 2147483647; `s/n` e `12A` geram erro. A data/hora é convertida para `LocalDate`, descartando o horário.
+
+## Catálogo automático de cursos
+
+O catálogo usa o mesmo `app.sheets.spreadsheet-id` da importação e a aba existente **Cursos**. O backend é a fonte de verdade: publica **A = nome** e **B = ID**, com os cabeçalhos `Nome do curso` e `ID do curso`. IDs são gravados como texto para preservar todos os dígitos. O nome da aba é validado; nesta implementação, somente `Cursos` é aceito.
+
+```properties
+app.sheets.catalog-enabled=false
+app.sheets.catalog-sheet-name=Cursos
+app.sheets.catalog-interval-ms=300000
+app.sheets.catalog-initial-delay-ms=10000
+app.sheets.catalog-dispatch-interval-ms=1000
+app.sheets.connect-timeout-ms=10000
+app.sheets.read-timeout-ms=30000
+```
+
+- A sincronização fica desabilitada por padrão e é independente de `check-enabled`. Cadastre, edite ou exclua um curso pela API: depois do commit, o evento apenas marca trabalho pendente. A tarefa agendada publica um snapshot atualizado, sem fazer chamadas ao Google dentro da transação ou da requisição HTTP.
+- O agendamento agrupa mudanças e faz reconciliação completa na inicialização e a cada intervalo. Falhas preservam o cadastro no banco e são novamente tentadas na reconciliação periódica. As execuções são serializadas dentro de uma instância; mantenha uma única instância publicadora para esse catálogo.
+- Somente valores de **Cursos!A:B** são substituídos, em uma única requisição atômica, seguida de leitura de conferência. Colunas C em diante, formatação e outras abas não são alteradas. Linhas obsoletas de A:B são limpas; **um banco sem cursos deixa somente o cabeçalho no catálogo**. Confira/guarde o catálogo manual antes de habilitar.
+- A aba não é criada ou redimensionada automaticamente. Ela deve existir e ter espaço para o cabeçalho e os cursos. A aba de importação deve ser explicitamente informada no intervalo e não pode ser `Cursos`.
+- Nomes repetidos após normalização de caixa/espaços, ou contendo `*`, `?` ou `~`, impedem a publicação completa para não tornar a busca por nome ambígua. O backend não renomeia cursos nem acrescenta restrição de unicidade ao banco. Corrija a ambiguidade no cadastro antes de sincronizar.
+- A publicação mantém nomes como texto literal, não como fórmulas. O backend não instala fórmulas ou modifica a coluna S da aba principal; configure o cabeçalho e a fórmula descritos na seção anterior.
+
+### Autorizar e ativar
+
+1. Confira o catálogo e mantenha `check-enabled=false` durante a configuração inicial para evitar importação enquanto ajusta as fórmulas.
+2. Configure `app.sheets.catalog-enabled=true` no arquivo local, **sem iniciar a aplicação ainda**.
+3. Execute `com.SheetsQuickstart` pela IDE com o argumento **`--authorize`** e aceite a permissão de escrita com uma conta que possa editar o arquivo. Esse modo somente autoriza: não lê inscrições, não acessa o banco e não publica o catálogo.
+4. A autorização de escrita é armazenada na chave `catalog-user`, separada da chave `user` usada pela leitura. Os tokens existentes não são apagados. Sem autorização válida, os serviços de fundo falham de forma controlada e não abrem navegador nem esperam consentimento.
+5. Inicie o backend e confira **Cursos!A:B** após a sincronização. Mantenha `ID do curso` em S1, a fórmula em S2 e o intervalo de leitura incluindo S. Depois da conferência, habilite a importação quando desejar.
+
+Para desabilitar a publicação, use `app.sheets.catalog-enabled=false` e reinicie. A importação volta a usar a autorização de leitura da chave `user`; dados já publicados no catálogo não são apagados ao desabilitar. Não execute autorização automática no agendamento nem remova `StoredCredential` para trocar permissões.
 
 ## Configuração local e Git
 
@@ -356,7 +419,7 @@ Em valores do arquivo `.properties`, represente acentos com escapes Unicode, com
 
    O intervalo usa o nome exato da aba, não o nome do arquivo. Se o Google retornar `Unable to parse range`, confira esse nome e o intervalo informado.
 
-4. Na primeira coleta, autorize no navegador com uma conta que tenha acesso à planilha. O retorno OAuth usa a porta local 8888 e os tokens são reutilizados na pasta `tokens`.
+4. Para a primeira autorização ou renovação, execute `com.SheetsQuickstart` com o argumento `--authorize` e use uma conta que tenha acesso à planilha. O retorno OAuth usa a porta local 8888. Depois, remova esse argumento para executar a coleta. A coleta e os serviços de fundo reutilizam a autorização salva sem abrir navegador. Para publicar o catálogo, siga a seção Catálogo automático de cursos e autorize com `catalog-enabled=true`.
 
 O console mostra somente a quantidade de cadastros e os erros, sem imprimir dados pessoais. Para acessar os objetos, use `result.registers()` no serviço. O Quickstart carrega `application.properties` e resolve suas variáveis de ambiente sem iniciar o banco ou o agendamento, usando o [carregador de configuração do Spring Boot](https://docs.spring.io/spring-boot/api/java/org/springframework/boot/context/config/ConfigDataEnvironmentPostProcessor.html). Os argumentos opcionais acima prevalecem sobre a configuração local.
 
@@ -371,7 +434,7 @@ List<Register> registers = result.registers();
 
 Configurações disponíveis no `application.properties` local: `app.sheets.spreadsheet-id`, `app.sheets.range`, `app.sheets.header-row`, `app.sheets.credentials-path`, `app.sheets.tokens-directory` e `app.sheets.oauth-port`. Para credenciais fora do projeto, use `app.sheets.credentials-path=file:C:/caminho/credentials.json`. Para usar uma variável de ambiente personalizada, configure explicitamente o vínculo, por exemplo `app.sheets.spreadsheet-id=${GOOGLE_SHEETS_SPREADSHEET_ID}`. Ajuste `header-row` para o número real da primeira linha do intervalo, usado no relatório de erros.
 
-A autenticação acontece apenas quando `collect()` é chamado. A aplicação Spring continua usando a configuração PostgreSQL existente. Erros de rede/autorização e cabeçalhos inválidos interrompem a coleta; erros de conteúdo descartam apenas a linha afetada e são retornados no relatório. Confira `errors()` antes de consumir os registros.
+A autenticação de fundo usa apenas a autorização salva, validando sua permissão ao criar o cliente; nunca solicita consentimento interativo. Use `SheetsQuickstart --authorize` explicitamente se a autorização estiver ausente, expirada/revogada ou sem a permissão necessária. A aplicação Spring continua usando a configuração PostgreSQL existente. Erros de rede/autorização e cabeçalhos inválidos interrompem a coleta; erros de conteúdo descartam apenas a linha afetada e são retornados no relatório. Confira `errors()` antes de consumir os registros.
 
 ## Checagem automática
 
@@ -397,12 +460,17 @@ Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e process
 .\mvnw.cmd test
 ```
 
-O perfil `test` usa dados fictícios, H2 em memória, Flyway e validação de schema; coleta Google e bootstrap desabilitados. Não acessa o banco de trabalho. Resultado atual de 05/10/2026: **427 testes aprovados em H2 e 427 em PostgreSQL 18.6 isolado**, sem falhas, erros ou ignorados, incluindo V5 e ciclo de inscrições. Logs: `target/register-status-fix-full-h2.log` e `target/register-status-fix-full-postgres.log`; resumos agregados com os mesmos prefixos em JSON. Cópia fiel sem privados: `target/register-fix-validation-20261005-152325`, Java/SQL conferidos com o original por SHA-256. PostgreSQL temporário encerrado; banco de trabalho não alterado. Os resultados anteriores de 390 referem-se à base histórica sem status de inscrição.
+O perfil `test` usa dados fictícios, H2 em memória por padrão, Flyway e validação de schema; coleta Google e bootstrap desabilitados. A configuração `test.db.*` permite executar as integrações em PostgreSQL isolado. Não execute a suíte contra o banco de trabalho: os testes limpam suas tabelas.
+
+Resultado em 06/10/2026: **484 testes aprovados em H2 e 484 em PostgreSQL 18.6 isolado**, zero falhas, erros ou ignorados, incluindo os 17 casos de aulas em lote. Confirmados cadastro, validações, rollback por datas repetidas/aula existente e conflito de horário de inscrito, além da consulta de inscrição sem corpo e contrato Swagger. Java/SQL da cópia conferidos com o workspace por SHA-256, sem diferenças. Configuração privada excluída; nenhuma chamada Google real ou acesso ao banco de trabalho. Cluster PostgreSQL temporário dedicado, restrito a loopback, encerrado e status sem servidor confirmado.
+
+Evidências: `target/courseclass-batch-final-summary.json` (H2), `target/courseclass-batch-postgres-summary.json` e `target/courseclass-batch-full-postgres.log`. Os resumos registram as cópias de validação e contagens. Resultados anteriores de 427 e 457 são históricos.
 
 | Área | Cobertura |
 | --- | --- |
 | Autenticação | 29 casos HTTP com Bearer real, relógio controlado, expiração/renovação/logout, perfis com acesso igual, rotação simultânea, token expirado em rotas públicas e limite de senha em bytes; 3 casos de cadastro inicial e 2 da migração V4. |
-| API e serviços | 82 casos em `ApiControllerTests` para os 23 endpoints e 6 em `ApiExceptionHandlerTests`; sucesso, erros 400/404/405/409/415/500, dados obrigatórios, limites de texto, datas, e-mail, PATCH parcial de endereço, histórico e rollback. |
+| API e serviços | `ApiControllerTests` e `ApiExceptionHandlerTests`: sucesso, erros 400/404/405/409/415/500, dados obrigatórios, limites de texto, datas, e-mail, PATCH parcial de endereço, histórico, rollback e Swagger da consulta de inscrição sem corpo. |
+| Aulas em lote | `CourseClassBatchTests`: 17 casos, cadastro persistido, validações, datas repetidas, duplicidade tardia, conflito de inscrito e rollback integral sem mensagem de sucesso parcial; endpoint documentado no Swagger. |
 | Importação | Reimportação, divergências, dados preservados, horários por ID de curso, conflitos existentes/entre linhas e rollback do lote, endereço e deficiências. |
 | Regras de aula | `ClassScheduleLifecycleTests`: 15 casos de criação após inscrição, reagendamento, validação de horários, cancelamento/adiamento, reativação e proteção de presenças. |
 | Concorrência | Unicidade de pessoa/curso, pessoa/aula e curso/dia; 11 casos de inscrição API/Sheets e 12 casos de lotes em ordem inversa/mudanças de aula e seis novos casos de cancelamento × presença, reativação × inscrição e reativação × mudança de aula, nas duas ordens. |
@@ -417,6 +485,7 @@ Para apenas API, autenticação ou os fluxos de aula:
 .\mvnw.cmd test "-Dtest=ApiControllerTests"
 .\mvnw.cmd test "-Dtest=AuthControllerTests,InitialUserConfigurationTests,AuthMigrationTests"
 .\mvnw.cmd test "-Dtest=ClassScheduleLifecycleTests,ConcurrentClassAndBatchTests,ClassTimeStatusMigrationTests"
+.\mvnw.cmd test "-Dtest=CourseClassBatchTests"
 ```
 
 Também é possível usar PostgreSQL exclusivo para testes, criado previamente e inicialmente vazio:
