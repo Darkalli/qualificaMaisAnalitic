@@ -82,6 +82,11 @@ public class RegisterSheetMapper {
                 }
             }
         }
+        // A coluna de ID calculado prevalece sobre o nome escolhido no formulário.
+        // Mantém compatibilidade com planilhas antigas que usavam o ID em "Curso de interesse".
+        if (!columns.containsKey(Column.COURSE) && columns.containsKey(Column.LEGACY_COURSE)) {
+            columns.put(Column.COURSE, columns.get(Column.LEGACY_COURSE));
+        }
         // A data declarada da inscrição prevalece sobre o horário de envio do formulário.
         if (timestampIndex != null) {
             columns.putIfAbsent(Column.REGISTER_DATE, timestampIndex);
@@ -255,7 +260,8 @@ public class RegisterSheetMapper {
         EDUCATION(true, "Escolaridade", "education"),
         WORK_STATE(true, "Situação de trabalho", "workState", "Situação profissional", "Trabalha atualmente?"),
         DISABILITIES(true, "Deficiência", "disabilities", "Deficiências"),
-        COURSE(true, "ID do curso", "courseOfInterestId", "courseId", "Curso de interesse", "courseOfInterest"),
+        COURSE(true, "ID do curso", "courseOfInterestId", "courseId"),
+        LEGACY_COURSE(false, "Curso de interesse", "courseOfInterest"),
         REGISTER_DATE(true, "Data de cadastro", "registerDate", "Data de inscrição", "Data da inscrição");
 
         private final boolean required;

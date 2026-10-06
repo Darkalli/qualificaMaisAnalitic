@@ -32,7 +32,26 @@ class CourseServiceTests {
 
     @BeforeEach
     void setUp() {
-        service = new CourseService(repository, Mappers.getMapper(CourseMapper.class));
+        service = new CourseService(repository, Mappers.getMapper(CourseMapper.class),
+                mock(org.springframework.context.ApplicationEventPublisher.class));
+    }
+
+    @Test void crudPublishesChangeOnlyAfterSuccessfulRepositoryOperation() {
+        var events = new java.util.ArrayList<Object>();
+        var contextual = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
+        contextual.addApplicationListener(event -> { if (event instanceof org.springframework.context.PayloadApplicationEvent<?> payload) events.add(payload.getPayload()); });
+        contextual.registerBean(CourseRepository.class, () -> repository);
+        contextual.registerBean(CourseMapper.class, () -> Mappers.getMapper(CourseMapper.class));
+        contextual.registerBean(CourseService.class); contextual.refresh();
+        try {
+            contextual.getBean(CourseService.class).addCourse(new AddCourseDto("Java",null,START,START));
+            assertEquals(1,events.size());
+            events.clear();
+            doThrow(new IllegalStateException("failed save")).when(repository).save(any());
+            assertThrows(IllegalStateException.class, () -> contextual.getBean(CourseService.class)
+                .addCourse(new AddCourseDto("Java",null,START,START)));
+            assertTrue(events.isEmpty());
+        } finally { contextual.close(); }
     }
 
     @Test

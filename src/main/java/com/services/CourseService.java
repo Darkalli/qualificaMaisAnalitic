@@ -16,19 +16,27 @@ public class CourseService {
 
     private final CourseRepository courseRepository;
     private final CourseMapper mapper;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
-    public CourseService(CourseRepository courseRepository, CourseMapper mapper) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public CourseService(CourseRepository courseRepository, CourseMapper mapper,
+                         org.springframework.context.ApplicationEventPublisher events) {
         this.courseRepository = courseRepository;
         this.mapper = mapper;
+        this.events = events;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public Course addCourse (AddCourseDto courseDto){
         required(courseDto.name(), "name");
         maxLength(courseDto.name(), 255, "name");
         maxLength(courseDto.description(), 255, "description");
         dateRange(courseDto.start(), courseDto.finish());
-        return courseRepository.save(new Course(courseDto.name(), courseDto.description(),courseDto.start(), courseDto.finish()));
+        Course saved = courseRepository.save(new Course(courseDto.name(), courseDto.description(),courseDto.start(), courseDto.finish()));
+        events.publishEvent(new com.sheets.CourseCatalogChanged());
+        return saved;
     }
+    @org.springframework.transaction.annotation.Transactional
     public Course updateCourse (UpdateCourseDto courseDto){
         positiveId(courseDto.courseId(), "courseId");
         Course course = courseRepository.findByid(courseDto.courseId())
@@ -41,14 +49,18 @@ public class CourseService {
         dateRange(courseDto.start() != null ? courseDto.start() : course.getStart(),
                 courseDto.finish() != null ? courseDto.finish() : course.getFinish());
         mapper.updateCoursefromDto(courseDto, course);
-        return courseRepository.save(course);
+        Course saved = courseRepository.save(course);
+        events.publishEvent(new com.sheets.CourseCatalogChanged());
+        return saved;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void deleteCourse(Long courseId){
         positiveId(courseId, "id");
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
         courseRepository.delete(course);
+        events.publishEvent(new com.sheets.CourseCatalogChanged());
     }
 
     public List<Course> getAllCourses(){

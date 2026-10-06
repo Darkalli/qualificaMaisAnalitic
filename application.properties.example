@@ -22,3 +22,12 @@ app.sheets.oauth-port=8888
 app.sheets.check-enabled=${GOOGLE_SHEETS_CHECK_ENABLED:true}
 app.sheets.check-interval=${GOOGLE_SHEETS_CHECK_INTERVAL:5m}
 app.sheets.check-initial-delay=${GOOGLE_SHEETS_CHECK_INITIAL_DELAY:10s}
+
+# Catálogo automático: mesma planilha, somente Cursos!A:B. Desabilitado até autorizar escrita.
+app.sheets.catalog-enabled=${GOOGLE_SHEETS_CATALOG_ENABLED:false}
+app.sheets.catalog-sheet-name=Cursos
+app.sheets.catalog-interval-ms=300000
+app.sheets.catalog-initial-delay-ms=10000
+app.sheets.catalog-dispatch-interval-ms=1000
+app.sheets.connect-timeout-ms=10000
+app.sheets.read-timeout-ms=30000

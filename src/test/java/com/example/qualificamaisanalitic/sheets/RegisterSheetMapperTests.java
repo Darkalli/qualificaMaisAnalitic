@@ -390,8 +390,52 @@ class RegisterSheetMapperTests {
             assertEquals(42L, mapper.map(List.of(header, row), 1).registers().getFirst().getCourseOfInterest().getId());
         }
         var duplicate = header();
-        duplicate.add("ID do curso");
+        duplicate.set(11, "ID do curso");
+        duplicate.add("courseId");
         assertThrows(IllegalArgumentException.class, () -> mapper.map(List.of(duplicate, row()), 1));
+    }
+
+    @Test
+    void prefersExplicitCourseIdOverCourseNameRegardlessOfColumnOrder() {
+        var header = header();
+        var row = row();
+        row.set(11, "Informática");
+        header.add("ID do curso");
+        row.add("73");
+        var result = mapper.map(List.of(header, row), 1);
+        assertTrue(result.errors().isEmpty());
+        assertEquals(73L, result.registers().getFirst().getCourseOfInterest().getId());
+        Collections.reverse(header);
+        Collections.reverse(row);
+        assertEquals(73L, mapper.map(List.of(header, row), 1).registers().getFirst().getCourseOfInterest().getId());
+    }
+
+    @Test
+    void usesComputedCourseIdInColumnSWithHumanCourseNameInColumnQ() {
+        var header = header();
+        var row = row();
+        header.remove(11);
+        row.remove(11);
+        while (header.size() < 16) { header.add("Extra " + header.size()); row.add(""); }
+        header.add("Curso de interesse"); row.add("Informática");
+        header.add("Aceite da declaração"); row.add("Sim");
+        header.add("ID do curso"); row.add("73");
+        var result = mapper.map(List.of(header, row), 1);
+        assertTrue(result.errors().isEmpty());
+        assertEquals(73L, result.registers().getFirst().getCourseOfInterest().getId());
+    }
+
+    @Test
+    void invalidComputedIdNeverFallsBackToLegacyCourseValue() {
+        for (String invalid : List.of("", "#N/A", "#REF!", "0", "-1", "Informática")) {
+            var header = header();
+            var row = row();
+            header.add("ID do curso"); row.add(invalid);
+            var result = mapper.map(List.of(header, row), 1);
+            assertTrue(result.registers().isEmpty(), invalid);
+            assertEquals(1, result.errors().size(), invalid);
+            assertTrue(result.errors().getFirst().message().contains("ID do curso"));
+        }
     }
 
     @Test

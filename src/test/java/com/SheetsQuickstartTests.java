@@ -13,6 +13,14 @@ class SheetsQuickstartTests {
     @TempDir
     Path directory;
 
+    @Test void explicitAuthorizationDoesNotCollectOrStartDatabase() throws Exception {
+        var properties = new com.sheets.config.SheetsProperties();
+        var provider = org.mockito.Mockito.mock(com.sheets.GoogleSheetsClientProvider.class);
+        SheetsQuickstart.run(new String[]{"--authorize"},properties,provider);
+        org.mockito.Mockito.verify(provider).authorizeInteractively();
+        org.mockito.Mockito.verifyNoMoreInteractions(provider);
+    }
+
     @Test
     void loadsLocalPropertiesAndResolvesPlaceholdersWithoutStartingSpring() throws Exception {
         Path config = directory.resolve("application.properties");
