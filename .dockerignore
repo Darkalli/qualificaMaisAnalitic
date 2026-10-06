@@ -1,0 +1,42 @@
+# Git e documentação
+.git
+docs
+HELP.md
+
+# Configuração privada e credenciais
+.env
+.env.*
+**/application.properties
+**/credentials.json
+**/tokens
+**/StoredCredential
+
+# Artefatos gerados localmente
+**/target
+**/build
+*.log
+
+# IntelliJ
+.idea
+*.iws
+*.iml
+*.ipr
+
+# Eclipse / STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# NetBeans
+nbproject/private
+nbbuild
+nbdist
+.nb-gradle
+dist
+
+# VS Code
+.vscode
