@@ -83,14 +83,14 @@ class RegisterServiceTests {
         var key = new SearchRegisterDto(CPF, 3L);
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L))
                 .thenReturn(Optional.of(registration));
-        assertSame(registration, service.getByPersonCpfAndCourseOfInterest(key));
+        assertSame(registration, service.getByPersonCpfAndCourseOfInterest(key.personCpf(), key.courseOfInterestId()));
         service.deleteRegister(key);
         assertEquals(StatusRegister.CANCELED, registration.getStatus());
         assertEquals(17L, registration.getId());
         assertEquals(DAY, registration.getRegisterDate());
         assertEquals(CPF, registration.getPerson().getCpf());
         assertEquals(3L, registration.getCourseOfInterest().getId());
-        assertSame(registration, service.getByPersonCpfAndCourseOfInterest(key));
+        assertSame(registration, service.getByPersonCpfAndCourseOfInterest(key.personCpf(), key.courseOfInterestId()));
         verify(registers).save(registration);
         verify(registers, never()).delete(any());
         verify(people).findByCpfForUpdate(CPF);
@@ -103,7 +103,7 @@ class RegisterServiceTests {
         when(courses.findByIdForRegistration(99L)).thenReturn(Optional.of(course(99L)));
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(ServiceTestData.person()));
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 99L)).thenReturn(Optional.empty());
-        assertThrows(EntityNotFoundException.class, () -> service.getByPersonCpfAndCourseOfInterest(key));
+        assertThrows(EntityNotFoundException.class, () -> service.getByPersonCpfAndCourseOfInterest(key.personCpf(), key.courseOfInterestId()));
         assertThrows(EntityNotFoundException.class, () -> service.deleteRegister(key));
         verify(registers, never()).delete(any());
     }
@@ -145,7 +145,7 @@ class RegisterServiceTests {
         assertSame(registration, service.addRegister(new AddRegisterDto(input, 3L, DAY)));
         assertEquals(List.of(registration), service.getAllRegisterByCpf(input));
         var key = new SearchRegisterDto(input, 3L);
-        assertSame(registration, service.getByPersonCpfAndCourseOfInterest(key));
+        assertSame(registration, service.getByPersonCpfAndCourseOfInterest(key.personCpf(), key.courseOfInterestId()));
         service.deleteRegister(key);
 
         verify(people, times(2)).findByCpfForUpdate(CPF);
@@ -164,7 +164,7 @@ class RegisterServiceTests {
         assertThrows(IllegalArgumentException.class,
                 () -> service.addRegister(new AddRegisterDto(input, 3L, DAY)));
         assertThrows(IllegalArgumentException.class, () -> service.getAllRegisterByCpf(input));
-        assertThrows(IllegalArgumentException.class, () -> service.getByPersonCpfAndCourseOfInterest(key));
+        assertThrows(IllegalArgumentException.class, () -> service.getByPersonCpfAndCourseOfInterest(key.personCpf(), key.courseOfInterestId()));
         assertThrows(IllegalArgumentException.class, () -> service.deleteRegister(key));
         assertThrows(IllegalArgumentException.class, () -> service.reactiveRegister(key));
         verifyNoInteractions(registers, people, courses);

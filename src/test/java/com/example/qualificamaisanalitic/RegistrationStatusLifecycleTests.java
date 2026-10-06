@@ -161,7 +161,7 @@ class RegistrationStatusLifecycleTests {
         reactivate(first);
         assertEquals(StatusRegister.ACTIVE, state(first));
         assertEquals(1, registers.count());
-        assertEquals(original.getId(), registration.getByPersonCpfAndCourseOfInterest(key(first)).getId());
+        assertEquals(original.getId(), registration.getByPersonCpfAndCourseOfInterest(CPF, first.getId()).getId());
         assertEquals(DAY, registers.findById(original.getId()).orElseThrow().getRegisterDate());
     }
 

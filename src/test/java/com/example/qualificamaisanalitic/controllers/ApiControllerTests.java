@@ -250,18 +250,17 @@ class ApiControllerTests {
         mvc.perform(get("/api/register/register/{cpf}", "012.345.678-90"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
         String key = registrationKey("012.345.678-90", courseId);
-        mvc.perform(get("/api/register").contentType(APPLICATION_JSON).content(key))
+        mvc.perform(registrationSearch("012.345.678-90", courseId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(registerId));
         mvc.perform(delete("/api/register").contentType(APPLICATION_JSON).content(key))
                 .andExpect(status().isNoContent()).andExpect(content().string(""));
         mvc.perform(get("/api/register/register/{cpf}", "012.345.678-90"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
-        mvc.perform(get("/api/register").contentType(APPLICATION_JSON).content(key))
+        mvc.perform(registrationSearch("012.345.678-90", courseId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(registerId))
                 .andExpect(jsonPath("$.status").value("CANCELED"));
-        mvc.perform(get("/api/register").contentType(APPLICATION_JSON)
-                        .content(registrationKey("01234567890", otherId)))
+        mvc.perform(registrationSearch("01234567890", otherId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(otherRegisterId))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
@@ -275,7 +274,7 @@ class ApiControllerTests {
         mvc.perform(patch("/api/register/active").contentType(APPLICATION_JSON).content(key))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Estado do registro já está como ativo"));
-        mvc.perform(get("/api/register").contentType(APPLICATION_JSON).content(key))
+        mvc.perform(registrationSearch("012.345.678-90", courseId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(registerId))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
@@ -300,7 +299,7 @@ class ApiControllerTests {
 
         mvc.perform(patch("/api/register/active").contentType(APPLICATION_JSON).content(key))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409));
-        mvc.perform(get("/api/register").contentType(APPLICATION_JSON).content(key))
+        mvc.perform(registrationSearch("01234567890", first))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(registerId))
                 .andExpect(jsonPath("$.status").value("CANCELED"));
@@ -350,8 +349,7 @@ class ApiControllerTests {
                         """.formatted(courseId)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.message").value("Já existe um registro com os dados informados."));
-        mvc.perform(get("/api/register").contentType(APPLICATION_JSON)
-                        .content(registrationKey("01234567890", courseId)))
+        mvc.perform(registrationSearch("01234567890", courseId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(registerId))
                 .andExpect(jsonPath("$.registerDate").value("2026-10-01"));
         assertEquals(1, jdbc.queryForObject("select count(*) from register", Integer.class));
@@ -377,8 +375,10 @@ class ApiControllerTests {
         long courseId = id(createCourse("Curso A"));
         createRegistration("01234567890", courseId);
         for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[]{
-                get("/api/register"), delete("/api/register")}) {
-            mvc.perform(request.contentType(APPLICATION_JSON).content(registrationKey("012.345.678-90", Long.MAX_VALUE)))
+                registrationSearch("012.345.678-90", Long.MAX_VALUE),
+                delete("/api/register").contentType(APPLICATION_JSON)
+                        .content(registrationKey("012.345.678-90", Long.MAX_VALUE))}) {
+            mvc.perform(request)
                     .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.message").value("Inscrição não encontrada para a pessoa e o curso informados."));
         }
@@ -410,12 +410,12 @@ class ApiControllerTests {
     }
 
     @Test
-    void registrationRequiresJsonBodiesAndRejectsInvalidDatesAndCourseIds() throws Exception {
+    void registrationWritesRequireJsonBodiesAndRejectInvalidDatesAndCourseIds() throws Exception {
         mvc.perform(get("/api/register").param("personCpf", "01234567890").param("courseOfInterestId", "1"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isMethodNotAllowed());
         mvc.perform(delete("/api/register")).andExpect(status().isBadRequest());
         mvc.perform(get("/api/register").contentType(APPLICATION_JSON).content("{invalid"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isMethodNotAllowed());
         mvc.perform(delete("/api/register").contentType(APPLICATION_JSON).content("{invalid"))
                 .andExpect(status().isBadRequest());
         for (String payload : new String[]{
@@ -452,7 +452,7 @@ class ApiControllerTests {
     @Test
     void queryAndDeletionRequireTheirBodyFields() throws Exception {
         for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[]{
-                get("/api/presence"), get("/api/register"), delete("/api/register")}) {
+                get("/api/presence"), delete("/api/register")}) {
             mvc.perform(request.contentType(APPLICATION_JSON).content("{}"))
                     .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
         }
@@ -480,8 +480,10 @@ class ApiControllerTests {
                             .content(registrationBody("01234567890", courseId)))
                     .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
             for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[]{
-                    get("/api/register"), delete("/api/register")}) {
-                mvc.perform(request.contentType(APPLICATION_JSON).content(registrationKey("01234567890", courseId)))
+                    registrationSearch("01234567890", courseId),
+                    delete("/api/register").contentType(APPLICATION_JSON)
+                            .content(registrationKey("01234567890", courseId))}) {
+                mvc.perform(request)
                         .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
             }
         }
@@ -587,6 +589,45 @@ class ApiControllerTests {
                 .andExpect(jsonPath("$.components.schemas.AddCourseClassDto.properties.start.type").value("string"))
                 .andExpect(jsonPath("$.components.schemas.AddCourseClassDto.properties.finish.type").value("string"));
         mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
+    }
+
+    @Test
+    void registrationLookupNoLongerUsesGetOnTheBaseRoute() throws Exception {
+        mvc.perform(get("/api/register").param("cpf", "01234567890").param("courseId", "1"))
+                .andExpect(status().isMethodNotAllowed()).andExpect(jsonPath("$.status").value(405));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc", "0", "-1", "1.5", "9223372036854775808"})
+    void registrationLookupRejectsInvalidCoursePathVariable(String courseId) throws Exception {
+        mvc.perform(get("/api/register/register/{cpf}/{courseId}", "01234567890", courseId))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc", "0123456789", "012345678901"})
+    void registrationLookupRejectsInvalidCpfPathVariable(String cpf) throws Exception {
+        mvc.perform(registrationSearch(cpf, 1))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void swaggerDescribesRegistrationPathVariablesWithoutRequestBody() throws Exception {
+        var result = mvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andReturn();
+        var operation = JsonPath.parse(result.getResponse().getContentAsString())
+                .read("$.paths['/api/register/register/{cpf}/{courseId}'].get", java.util.Map.class);
+        assertFalse(operation.containsKey("requestBody"));
+        var parameters = (List<java.util.Map<String, Object>>) operation.get("parameters");
+        assertEquals(2, parameters.size());
+        for (String name : List.of("cpf", "courseId")) {
+            var parameter = parameters.stream().filter(p -> name.equals(p.get("name"))).findFirst().orElseThrow();
+            assertEquals("path", parameter.get("in"));
+            assertEquals(true, parameter.get("required"));
+        }
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder registrationSearch(String cpf, long courseId) {
+        return get("/api/register/register/{cpf}/{courseId}", cpf, courseId);
     }
 
     private String registrationKey(String cpf, long courseId) {

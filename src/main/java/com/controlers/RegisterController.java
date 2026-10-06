@@ -45,8 +45,8 @@ public class RegisterController {
         return ResponseEntity.ok().body(registerService.getAllRegisterByCpf(cpf));
     }
 
-    @GetMapping
-    public ResponseEntity<Register> getByPersonCpfAndCourseOfInterest(@RequestBody SearchRegisterDto search){
-        return ResponseEntity.ok(registerService.getByPersonCpfAndCourseOfInterest(search));
+    @GetMapping("/register/{cpf}/{courseId}")
+    public ResponseEntity<Register> getByPersonCpfAndCourseOfInterest(@PathVariable String cpf, @PathVariable Long courseId){
+        return ResponseEntity.ok(registerService.getByPersonCpfAndCourseOfInterest(cpf, courseId));
     }
 }

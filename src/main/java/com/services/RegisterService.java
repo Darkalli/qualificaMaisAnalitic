@@ -85,11 +85,11 @@ public class RegisterService {
         return registerRepository.findByPerson_Cpf(cpf);
     }
 
-    public Register getByPersonCpfAndCourseOfInterest (SearchRegisterDto dto){
-        validateKey(dto.personCpf(), dto.courseOfInterestId());
-        String cpf = formatCpf(dto.personCpf());
-        cpf = cleanCpf(cpf);
-        return registerRepository.findByPerson_CpfAndCourseOfInterest_Id(cpf, dto.courseOfInterestId())
+    public Register getByPersonCpfAndCourseOfInterest (String cpf, Long courseId){
+        validateKey(cpf, courseId);
+        String newCpf = formatCpf(cpf);
+        newCpf = cleanCpf(newCpf);
+        return registerRepository.findByPerson_CpfAndCourseOfInterest_Id(newCpf, courseId)
                 .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados."));
     }
     // The public transactional methods keep these locks until commit/rollback.
