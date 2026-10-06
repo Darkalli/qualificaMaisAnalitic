@@ -1,6 +1,7 @@
 package com.services;
 
 import com.dtos.courseClassesDtos.AddCourseClassDto;
+import com.dtos.courseClassesDtos.AddCourseClassInBatchDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.entities.Course;
 import com.entities.CourseClass;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -54,6 +56,34 @@ public class CourseClassService {
         CourseClass courseClass = new CourseClass(dto.day(), dto.session(), dto.start(), dto.finish(), course, StatusClass.ACTIVE);
         validateRegistrations(courseClass);
         return courseClassRepository.save(courseClass);
+    }
+
+    @Transactional
+    public List<CourseClass> addCourseClassInBatch(AddCourseClassInBatchDto dto) {
+        if (dto.day() == null || dto.day().isEmpty()){
+            throw new IllegalArgumentException("A lista de aulas não pode ser vazia");
+        }
+        positiveId(dto.courseId(), "courseId");
+        Course course2 = courseRepository.findByid(dto.courseId())
+                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o ID: " + dto.courseId()));
+        Course course = lockCourse(course2);
+
+        List<CourseClass> list = new ArrayList<>();
+        for (LocalDate day : dto.day()) {
+            if (day == null){
+                throw new IllegalArgumentException("O dia da aula não pode ser nulo");
+            }
+            validateTimes(day, dto.session(), dto.start(), dto.finish());
+            if (courseClassRepository.existsByCourseAndDay(course, day)) {
+                String msg = "O curso já possui uma aula registrada para o dia: " + day;
+                throw new ConflictException(msg);
+            }
+            CourseClass courseClass = new CourseClass(day, dto.session(), dto.start(), dto.finish(), course, StatusClass.ACTIVE);
+            validateRegistrations(courseClass);
+            courseClassRepository.save(courseClass);
+            list.add(courseClass);
+        }
+        return list;
     }
 
     @Transactional

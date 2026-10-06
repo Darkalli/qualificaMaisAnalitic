@@ -1,6 +1,7 @@
 package com.controlers;
 
 import com.dtos.courseClassesDtos.AddCourseClassDto;
+import com.dtos.courseClassesDtos.AddCourseClassInBatchDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.entities.CourseClass;
 import com.services.CourseClassService;
@@ -23,6 +24,11 @@ public class CourseClassController {
     @PostMapping
     public ResponseEntity<CourseClass> createCourseClass(@RequestBody AddCourseClassDto courseClassDto){
         return ResponseEntity.status(HttpStatus.CREATED).body(courseClassService.addCourseClass(courseClassDto));
+    }
+
+    @PostMapping("/courseClass/batch")
+    public ResponseEntity<List<CourseClass>> createCourseClassInBatch(@RequestBody AddCourseClassInBatchDto dto){
+        return ResponseEntity.status(HttpStatus.CREATED).body(courseClassService.addCourseClassInBatch(dto));
     }
 
     @PatchMapping
