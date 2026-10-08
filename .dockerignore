@@ -6,6 +6,7 @@ HELP.md
 # Configuração privada e credenciais
 .env
 .env.*
+!.env.example
 **/application.properties
 **/credentials.json
 **/tokens
