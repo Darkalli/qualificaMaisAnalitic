@@ -1,0 +1,54 @@
+name: qualifica
+services:
+  db:
+    image: postgres:18
+    restart: always
+    environment:
+      POSTGRES_DB: qualificamais
+      POSTGRES_USER: qualifica
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no arquivo .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qualifica -d qualificamais"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qualifica-api:0.1.0
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/qualificamais
+      SPRING_DATASOURCE_USERNAME: qualifica
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no arquivo .env}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_FLYWAY_ENABLED: "true"
+      APP_SHEETS_CHECK_ENABLED: "false"
+      APP_SHEETS_CATALOG_ENABLED: "false"
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SERVER_TOMCAT_REDIRECT_CONTEXT_ROOT: "false"
+      APP_AUTH_BOOTSTRAP_USERNAME: ${BOOTSTRAP_USERNAME:-}
+      APP_AUTH_BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-}
+      SERVER_PORT: "8080"
+      SERVER_ADDRESS: 0.0.0.0
+    ports:
+      - "127.0.0.1:8080:8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  postgres_data:
