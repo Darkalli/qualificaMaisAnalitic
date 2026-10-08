@@ -28,7 +28,24 @@ Backend para gerenciar pessoas, cursos, turmas, inscrições e presenças. Ofere
 
 A API fica em `http://localhost:8080` por padrão. Na IDE, execute `com.QualificaMaisAnaliticApplication` com o processamento de anotações habilitado para Lombok e MapStruct. Para criar o primeiro usuário, configure `AUTH_BOOTSTRAP_USERNAME` e `AUTH_BOOTSTRAP_PASSWORD` no ambiente da execução antes de iniciar; remova essas variáveis após o cadastro inicial. Veja o [fluxo de login](docs/guia-tecnico.md#login-e-renovação-de-sessão).
 
-O Flyway aplica V1–V4: estrutura inicial, campos obrigatórios, horários/status de aulas e usuários/sessões de acesso. A V3 usa horários sem data e exige início anterior ao fim. A V1 consolidada não converte instalações com o histórico antigo. Veja os [detalhes de migração](docs/guia-tecnico.md#preparar-o-postgresql).
+O Flyway aplica V1–V5: estrutura inicial, campos obrigatórios, horários/status de aulas, usuários/sessões de acesso e status de inscrições. A V3 usa horários sem data e exige início anterior ao fim. A V1 consolidada não converte instalações com o histórico antigo. Veja os [detalhes de migração](docs/guia-tecnico.md#preparar-o-postgresql).
+
+## Implantação no servidor
+
+Estado registrado em **07/10/2026**, a partir das saídas do servidor e da validação do usuário:
+
+- Ubuntu com Podman executado como root e Compose externo; PostgreSQL e API em containers.
+- Nginx no host termina HTTPS em `https://192.168.1.83` e encaminha para a API em `127.0.0.1:8080`. Swagger em `https://192.168.1.83/swagger-ui/index.html`.
+- A imagem alternativa com **JDK 25 e JAR pré-compilado validado no Windows** foi construída/testada no Ubuntu e promovida pelo procedimento para `qualifica-api:0.1.0`, recriando somente a API e preservando o banco existente. Após a troca, o usuário confirmou **HTTPS 200 e login realizado**.
+- Antes dessa troca, OpenAPI e login por HTTPS retornaram 200 e Firefox abriu sem avisos após confiar na CA interna, sem exceção de segurança. A última confirmação de login não incluiu novo código HTTP ou captura do certificado.
+- Banco/API voltaram automaticamente em um reboot anterior. Ambos usam `restart: always`; `podman-restart.service` e Nginx estão habilitados. **HTTPS e login após reboot com a nova imagem ainda não foram testados.**
+- Bootstrap removido do `.env` após o primeiro acesso; login continuou funcionando. Coleta e catálogo Google permanecem desligados **no servidor**.
+
+> **Build original ainda pendente:** Dockerfile multi-stage com build Maven/JDK 25 e execução JRE 25 como usuário não root; Compose com `restart: always`, proxy HTTPS e porta restrita a `127.0.0.1:8080`. Quatro testes de contrato e execução local do JAR em PostgreSQL isolado passaram. A build Maven no Ubuntu falhou por DNS/timeouts; a imagem alternativa implantada usa JDK em cache e não executa esse build. Veja [validação local](docs/guia-tecnico.md#validação-local-dos-arquivos-de-implantação--07102026) e [implantação da imagem alternativa](docs/guia-tecnico.md#imagem-alternativa-e-atualização-da-api--07102026).
+
+Pendências: conferir HTTPS/login após reboot da nova imagem, confirmar a limpeza integral dos recursos temporários, testar backup/restauração PostgreSQL e resolver a rede para validar a build multi-stage. Backup de arquivos de implantação não substitui backup do banco.
+
+Configuração aplicada, certificados, confiança dos clientes, verificações e pendências estão no [guia de implantação](docs/guia-tecnico.md#implantação-no-ubuntu-podman-nginx-e-https). O cliente JavaFX ainda não foi criado.
 
 ## API
 
@@ -38,7 +55,7 @@ O Flyway aplica V1–V4: estrutura inicial, campos obrigatórios, horários/stat
 | Cursos | `/api/course` | Cadastro, atualização, listagem, busca por nome e exclusão |
 | Turmas | `/api/courseClass` | Cadastro, atualização/status, consulta por curso e cancelamento |
 | Presenças | `/api/presence` | Registro/atualização por pessoa + aula; consultas por pessoa ou aula/curso |
-| Inscrições | `/api/register` | Criação, consulta por CPF ou CPF/curso e exclusão |
+| Inscrições | `/api/register` | Criação, consulta por CPF ou CPF/curso, cancelamento lógico e reativação |
 | Autenticação | `/api/auth` | Login, renovação, logout, usuário atual e cadastro de usuários de acesso |
 
 POST e PATCH recebem JSON. Criações retornam **201**, consultas e atualizações **200**, e exclusões **204**.
@@ -47,7 +64,7 @@ As rotas de negócio exigem `Authorization: Bearer <token>`. Faça login em `POS
 
 Erros retornam JSON com `status` e `message`: **400** para dados inválidos, **401** para login/token ausente, inválido ou expirado, **403** para acesso negado, **404** para registro não encontrado, **409** para conflitos e **500** para falhas inesperadas. Detalhes no [guia de respostas](docs/guia-tecnico.md#respostas-e-limites-atuais).
 
-Consulte as [rotas completas e exemplos](docs/guia-tecnico.md#api-http): algumas URLs repetem o recurso, como `/api/person/person/{cpf}`, e os GETs de presença por curso/aula e de inscrição por CPF/curso exigem corpo JSON. Endereços não têm endpoints próprios.
+Consulte as [rotas completas e exemplos](docs/guia-tecnico.md#api-http): algumas URLs repetem o recurso, como `/api/person/person/{cpf}`, e o GET de presença por curso/aula exige corpo JSON. A consulta de inscrição por CPF/curso usa variáveis no caminho, sem corpo. Endereços não têm endpoints próprios.
 
 ## Importação do Google Sheets
 

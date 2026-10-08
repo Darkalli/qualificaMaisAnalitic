@@ -454,6 +454,221 @@ O arquivo já oferece as variáveis `GOOGLE_SHEETS_CHECK_ENABLED`, `GOOGLE_SHEET
 
 Cada ciclo relê todo o intervalo, localiza ou cria as pessoas por CPF e processa as inscrições por curso, registrando as quantidades, divergências e erros por linha. Falhas de leitura ou persistência são registradas, e o próximo ciclo tenta novamente. A aplicação usa o PostgreSQL configurado durante a inicialização; a autorização Google ocorre na primeira coleta, reutilizando os tokens existentes. Para a primeira autorização, execute o Quickstart e conclua o fluxo no navegador antes de deixar a rotina rodando sem interação.
 
+## Implantação no Ubuntu: Podman, Nginx e HTTPS
+
+### Estado registrado em 07/10/2026
+
+Esta seção registra a operação confirmada nesta sessão; não representa uma nova inspeção remota feita durante a atualização dos documentos. As saídas do Ubuntu e os resultados de login foram fornecidos pelo usuário. O agente também conferiu, no Windows, a CA instalada, seu fingerprint e uma requisição HTTPS com validação normal, retornando 200; o OpenAPI anunciou `https://192.168.1.83`.
+
+```text
+Navegador / futuro JavaFX
+        HTTPS 192.168.1.83:443
+                   |
+              Nginx no host
+                   |
+           HTTP 127.0.0.1:8080
+                   |
+         API no container Podman
+                   |
+          PostgreSQL db:5432
+```
+
+- Projeto no servidor: `/home/qualificaProject/qualificaMaisAnalitic`.
+- Comando usado: `sudo docker compose`; a saída informa emulação por Podman e uso do provedor externo `/usr/libexec/docker/cli-plugins/docker-compose`.
+- Containers: `qualifica-db-1` e `qualifica-api-1`, na rede `qualifica_default`; imagem da API `qualifica-api:0.1.0`.
+- Versões informadas pelo servidor: Nginx 1.28.3 (Ubuntu), OpenSSL 3.5.5 e PostgreSQL 18.6.
+- API publicada somente no loopback do host: `127.0.0.1:8080:8080`; não abrir a porta 8080 para os agentes.
+- Nginx já atendia na porta 80 pelo site padrão, que foi preservado. HTTPS foi acrescentado em um site separado.
+- UFW estava `inactive` na consulta fornecida; não foi ativado nesta etapa. Isso não constitui uma auditoria das demais regras de rede.
+- No servidor: bootstrap retirado após o cadastro inicial; coleta e catálogo Google mantidos desligados. A validação real do catálogo no desenvolvimento local em 06/10 não significa ativação no Ubuntu.
+
+**Arquivos locais reconciliados:** Dockerfile agora contém build Maven em JDK 25, estágio JRE 25, usuário não root e entrada `java -jar /app/app.jar`. Compose atual usa `always` nos dois serviços e as duas variáveis de proxy abaixo, mantendo banco sem porta publicada, volume PostgreSQL existente, Google desligado e bootstrap opcional vazio. Os três arquivos Dockerfile, compose.yaml e .dockerignore foram transferidos e seus hashes conferidos pelo usuário. Isso não é auditoria de toda a configuração remota. A imagem alternativa foi testada no Ubuntu; a build multi-stage Maven/JRE permanece pendente, conforme registrado abaixo.
+
+### Validação local dos arquivos de implantação — 07/10/2026
+
+Validação local em **07/10/2026**: quatro testes de contrato do Compose aprovados; JAR empacotado em cópia sem configurações privadas/OAuth e iniciado com PostgreSQL temporário exclusivo. Flyway V1–V5 aplicado; OpenAPI 200, acesso anônimo à rota protegida 401, senha inválida 401 e login 200 antes/depois de retirar o bootstrap temporário. Cabeçalhos encaminhados fizeram o OpenAPI anunciar `https://192.168.1.83`. API e cluster temporários encerrados e fontes/migrações preservadas. Nenhum acesso ao banco de trabalho, Google ou Ubuntu; nenhum deploy, commit ou push.
+
+**Limites:** não foi construída/executada a imagem Linux neste Windows; Docker/Podman indisponíveis. O JAR foi empacotado com `-DskipTests`; a suíte JUnit completa não foi reexecutada. O teste de cabeçalhos usou HTTP local, não uma nova conexão TLS nem o Nginx real. Esses limites descrevem a etapa local anterior à implantação: posteriormente, a imagem alternativa JDK/JAR foi construída e testada no Ubuntu. A build multi-stage Maven/JRE e HTTPS/login após reboot com a nova imagem continuam pendentes.
+
+Evidências locais (ignoradas pelo Git): `target/deployment-local-validation-summary.json`, `target/deployment-contract-validation.log` e `target/deployment-package-validation.log`. Logs detalhados e cópia isolada da rodada final: `C:/Users/USER/AppData/Local/hermes/cache/scratch/qualifica-deploy-20261007-7e483cef/verified-rerun/`.
+
+### Imagem alternativa e atualização da API — 07/10/2026
+
+Resultados registrados a partir dos logs e confirmações enviados pelo usuário; nenhuma nova conexão SSH ou reexecução foi realizada durante esta correção documental.
+
+- **Build original bloqueada:** Maven falhou por `Temporary failure in name resolution` ao resolver o parent POM e por `Read timed out` ao baixar `simpleclient_bom:0.16.0`. O diagnóstico mostrou espera por resposta HTTPS durante resolução de dependências. A causa definitiva da instabilidade não foi estabelecida; não alterar versões nem desabilitar TLS para ocultar essas falhas.
+- **Alternativa construída:** JAR da cópia limpa validada no Windows, sem configurações privadas/OAuth, com fontes Java/SQL reconferidas. O usuário construiu `localhost/qualifica-api:offline` no Ubuntu usando `--pull=never --network=none` e a base JDK 25 já disponível. Imagem ID `933dd0a1024c5a11de1be3643a81b0edeaf205eea3ed30c4d4585aeab0d7432f`, executando como usuário não root. Essa imagem contém **JDK**, não a JRE final do Dockerfile multi-stage; não comprova build Maven no Ubuntu.
+- **Teste isolado:** PostgreSQL/API temporários, sem acesso ao banco principal. Após corrigir as variáveis de datasource ausentes, Flyway aplicou V1–V5 e a API iniciou. OpenAPI retornou **200** e rota protegida sem token **401** dentro do container. A porta 18080 inicialmente expirava na rede de teste `--internal`; após usar uma bridge dedicada comum, o host também retornou **200/401**. Login nesse banco Linux de teste não foi realizado, pois bootstrap estava vazio.
+- **Atualização principal:** procedimento de retag da imagem alternativa para `docker.io/library/qualifica-api:0.1.0` e recriação somente da API, sem build, pull ou dependências. O usuário confirmou **HTTPS HTTP 200** e **login realizado**. A última listagem mostrou API criada/rodando há 5 minutos em `127.0.0.1:8080`, enquanto o banco estava criado há 24 horas/rodando há 6 horas, compatível com banco não recriado nesta troca. O ID exato da imagem do container principal não foi reinspecionado; a listagem mostra seu nome/tag.
+- **Backup e rollback:** backup de arquivos confirmado em `/root/qualifica-deploy-backup/pre-update.D4aCjS`; tag de rollback orientado `localhost/qualifica-api:pre-update-D4aCjS`, não reinspecionado na saída final. Preservar backup, rollback e contexto offline até estabelecer um build reproduzível. Backup de arquivos **não comprova dump/restauração PostgreSQL**; scratch local não é armazenamento permanente.
+- **Limpeza ainda não comprovada integralmente:** remoção dos containers/redes e dos env-files temporários foi orientada. A saída final de Compose lista somente o projeto principal, não prova ausência global desses recursos ou de eventuais volumes anônimos de teste. Identificar os recursos antes de removê-los; não usar `prune`, `down -v` ou remoção de volumes principais para concluir a limpeza.
+
+O procedimento de promoção usado foi:
+
+```bash
+# Histórico da troca; não executar novamente como teste de build.
+sudo podman tag localhost/qualifica-api:offline docker.io/library/qualifica-api:0.1.0
+sudo docker compose up -d --no-build --pull never --no-deps --force-recreate api
+```
+
+A troca exige confirmar previamente que o banco existente está em execução; `--no-deps` não inicia um banco parado. Não usar construção automática com o Dockerfile original para substituir a API funcional enquanto os downloads continuam instáveis. Bootstrap e Google permanecem desligados no servidor.
+
+### Bootstrap, API e reinício dos containers
+
+Após confirmar o primeiro login, o usuário deixou `BOOTSTRAP_USERNAME=` e `BOOTSTRAP_PASSWORD=` vazios no `.env` do servidor; `DB_PASSWORD` foi preservada. A recriação da API não apagou o usuário existente; login continuou retornando 200. Não há reset de usuários nem autorização para limpar o banco.
+
+Configuração **aplicada no servidor**, como trecho de referência, não arquivo completo:
+
+```yaml
+services:
+  db:
+    restart: always
+  api:
+    restart: always
+    environment:
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SERVER_TOMCAT_REDIRECT_CONTEXT_ROOT: "false"
+      APP_SHEETS_CHECK_ENABLED: "false"
+      APP_SHEETS_CATALOG_ENABLED: "false"
+    ports:
+      - "127.0.0.1:8080:8080"
+```
+
+O Spring usa o tratamento de cabeçalhos do framework para reconhecer o protocolo original; o ajuste do Tomcat evita redirecionamento do contexto antes de considerar HTTPS no proxy.[2]
+
+A unidade `podman-restart.service` **instalada neste servidor** contém `start --all --filter restart-policy=always` e `stop --all --filter restart-policy=always`. Por isso os containers foram alinhados com `always`, e o serviço habilitado. Não generalizar essa unidade a todas as versões do Podman; a documentação permite filtrar containers por política de reinício.[3]
+
+- A unidade é geral para os containers rootful selecionados, não exclusiva do Qualifica.
+- `always` pode iniciar no boot containers parados manualmente antes dele; considerar isso ao planejar manutenção.
+- Reboot anterior à troca da imagem: PostgreSQL voltou `Up ... (healthy)`, API voltou `Up` e OpenAPI retornou 200 **sem start/restart manual**. Isso não valida automaticamente o boot da imagem alternativa atual.
+- Nginx retornou `enabled`; **HTTPS e login após novo reboot com a imagem atual ainda não foram testados**.
+
+Para conferir, sem mudar dados:
+
+```bash
+sudo systemctl is-enabled podman-restart.service
+sudo systemctl is-enabled nginx
+sudo podman inspect qualifica-db-1 qualifica-api-1 \
+  --format '{{.Name}}: {{.HostConfig.RestartPolicy.Name}}'
+sudo podman ps -a --format 'table {{.Names}}\t{{.Status}}'
+```
+
+`Up` sozinho não prova que a API terminou de inicializar; conferir o log e a resposta HTTP.
+
+### Nginx e cabeçalhos encaminhados
+
+Arquivo usado: `/etc/nginx/sites-available/qualifica-https`, com link em `/etc/nginx/sites-enabled/qualifica-https`. O site `default` foi preservado. Configuração aplicada e validada:
+
+```nginx
+server {
+    listen 443 ssl default_server;
+    server_name 192.168.1.83;
+
+    ssl_certificate /etc/nginx/qualifica-tls/server.crt;
+    ssl_certificate_key /etc/nginx/qualifica-tls/server.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Forwarded "";
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Prefix "";
+    }
+}
+```
+
+TLS termina no Nginx. Manter a chave privada restrita e legível pelo processo mestre; somente o certificado público é enviado aos clientes.[1] O bloco acima define os cabeçalhos encaminhados no proxy; não remover essa fronteira ao usar `framework` no Spring.
+
+Antes de aplicar alterações no site:
+
+```bash
+sudo nginx -t
+# Somente após sucesso:
+sudo systemctl reload nginx
+```
+
+`nginx -t` passou, a recarga foi executada e a chamada HTTPS chegou à API. Nenhum redirecionamento HTTP→HTTPS foi acrescentado ao site padrão nesta etapa; agentes devem usar explicitamente a URL HTTPS.
+
+### Certificados e renovação
+
+CA interna: **Qualifica Internal Root CA**. O certificado do servidor foi emitido com essa CA usando OpenSSL `req -x509 -CA ... -CAkey ...`.[5]
+
+| Item | Registro desta emissão |
+| --- | --- |
+| CA pública | `/root/qualifica-ca/ca.crt` |
+| Chave privada da CA | `/root/qualifica-ca/ca.key`, protegida por senha |
+| Certificado do servidor | `/etc/nginx/qualifica-tls/server.crt` |
+| Chave privada do servidor | `/etc/nginx/qualifica-tls/server.key`, sem senha para o Nginx, com acesso restrito |
+| Emissor do servidor | `CN=Qualifica Internal Root CA` |
+| SAN do servidor | `IP Address:192.168.1.83` |
+| Validade do servidor | 07/10/2026 13:20:49 UTC até **07/10/2027 13:20:49 UTC** |
+| Validade da CA | 07/10/2026 13:14:14 UTC até 04/10/2036 13:14:14 UTC |
+
+Fingerprint SHA-256 da CA pública, conferido no Windows e no arquivo DER baixado:
+
+```text
+43:DD:69:5E:BD:C6:C5:94:8C:90:CB:F3:FA:09:22:85:8A:E2:44:F2:99:16:F5:CC:27:5B:E9:12:08:0A:2E:1D
+```
+
+Validação executada no Ubuntu, com resultado `server.crt: OK`:
+
+```bash
+sudo openssl verify \
+  -CAfile /root/qualifica-ca/ca.crt \
+  -purpose sslserver \
+  -verify_ip 192.168.1.83 \
+  /etc/nginx/qualifica-tls/server.crt
+```
+
+HTTPS executado no servidor antes e depois do ajuste do Spring, ambos com 200:
+
+```bash
+sudo curl --cacert /root/qualifica-ca/ca.crt \
+  --connect-timeout 5 --max-time 15 \
+  -sS -o /dev/null -w 'HTTP %{http_code}\n' \
+  https://192.168.1.83/v3/api-docs
+```
+
+Não usar `-k`, exceção de navegador ou desativação de validação TLS como prova de segurança. Exportar/distribuir apenas a CA pública; nunca `ca.key` ou `server.key`. Guardar senha e backup protegido da chave da CA, preferencialmente offline. Backup da CA e renovação **ainda não foram comprovados**. Planejar aviso e renovação antes de 07/10/2027; validar o novo certificado e testar/recarregar Nginx antes de considerar a renovação concluída. Troca de IP exige nova validação do SAN e dos clientes.
+
+### Confiança no Windows, Firefox e futuro JavaFX
+
+Exportação pública usada no servidor:
+
+```bash
+sudo openssl x509 -in /root/qualifica-ca/ca.crt \
+  -outform DER -out "$HOME/qualifica-ca.cer" &&
+sudo chmod 0644 "$HOME/qualifica-ca.cer"
+```
+
+Download usado no PowerShell do Windows:
+
+```powershell
+scp qualifica@192.168.1.83:qualifica-ca.cer "$env:USERPROFILE\Downloads\qualifica-ca.cer"
+```
+
+- **Windows:** certificado importado em `Cert:\CurrentUser\Root`, não em todos os usuários. O agente confirmou subject/fingerprint no repositório e no arquivo DER; `Invoke-WebRequest` sem contorno TLS retornou 200 e OpenAPI anunciou a URL HTTPS.
+- **Firefox deste usuário:** inicialmente havia uma exceção, que foi removida. A tela sem exceção mostrou `SEC_ERROR_UNKNOWN_ISSUER`. Foi importado `qualifica-ca.cer` em Configurações → Privacidade e segurança → Certificados → Ver certificados → Autoridades → Importar. Marcada somente a confiança para identificar **sites**, sem confiança para email. Usuário confirmou abertura sem avisos e login 200 em HTTPS. Estes passos registram a interface utilizada, não garantem os mesmos rótulos em todas as versões.
+- **Demais PCs/perfis:** ainda não validados; não presumir que a importação feita nesta conta se aplica a todos.
+- **JavaFX:** projeto ainda não existe. Confiança na CA, validação do IP e integração com login/refresh serão configuradas/testadas quando o cliente for criado; não desabilitar verificações TLS como alternativa.
+
+URL validada pelo navegador: `https://192.168.1.83/swagger-ui/index.html`. O sucesso com uma exceção não foi aceito como encerramento: ela foi removida, a confiança corrigida e o login repetido sem avisos.
+
+### Falhas resolvidas e próximos cuidados
+
+- `UnknownHostException: db`: banco estava `Exited (0)` enquanto a API reiniciava. `--no-deps` recriou só a API e não ligou o banco parado. Ambos constavam na mesma rede. Iniciar o banco, confirmar `accepting connections` e reiniciar a API restabeleceu 200; não foi necessário mudar senha, Flyway, IP do banco ou volume. A origem do desligamento anterior não foi estabelecida.
+- Reinício: serviço estava `disabled`/`inactive`; após habilitar, a unidade foi conferida e as políticas efetivas atualizadas para `always`. Reboot validou banco/API; não atribuir automaticamente o desligamento anterior a essa configuração sem evidência adicional.
+- SSH: o PC associava o IP ao MAC diferente do fotografado no servidor. Um mapeamento direcionado ao MAC confirmado restabeleceu SSH e foi tornado persistente pelo usuário. É um contorno daquele PC, **não uma resolução definitiva de possível conflito IP/rede**; acesso de outros agentes ainda precisa de teste. Não apagar `known_hosts` ou aceitar mudança de chave sem conferir identidade.
+- Firefox: a correção foi confiar na CA pública verificada, não prosseguir pela tela de risco.
+
+Pendências operacionais: resolver DNS/timeouts e validar a build multi-stage Maven/JRE reproduzível; conferir a limpeza integral dos recursos de teste e preservar contexto offline/rollback; validar HTTPS/login após reboot com a nova imagem e em outros PCs; criar/confirmar backup protegido da CA e rotina de renovação; automatizar backup do PostgreSQL e provar restauração em ambiente separado; tratar a dependência do contorno de rede; validar monitoramento e decidir ativação de Sheets **no servidor** com autorização e backup próprios. Não declarar teste de carga, hardening completo, restauração, auditoria de firewall ou confiança JavaFX como concluídos.
+
 ## Testes
 
 ```powershell
@@ -495,3 +710,10 @@ Também é possível usar PostgreSQL exclusivo para testes, criado previamente e
 ```
 
 A porta e o banco são exemplos; o servidor usado na validação foi encerrado. Senha opcional por `TEST_DB_PASSWORD`. Os testes removem registros e criam schemas temporários: nunca apontar para banco de trabalho.
+
+## Sources
+
+[1] https://nginx.org/en/docs/http/configuring_https_servers.html — Nginx: HTTPS
+[2] https://docs.spring.io/spring-boot/how-to/webserver.html — Spring Boot: proxy e forwarded headers
+[3] https://docs.podman.io/en/latest/markdown/podman-start.1.html — Podman: start e filtro de reinício
+[5] https://docs.openssl.org/3.5/man1/openssl-req — OpenSSL: emissão de certificados
