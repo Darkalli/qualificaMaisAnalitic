@@ -40,6 +40,11 @@ public class RegisterController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping
+    public ResponseEntity<List<Register>> getAllRegisters(){
+        return ResponseEntity.ok().body(registerService.getAllRegisters());
+    }
+
     @GetMapping("/register/{cpf}")
     public ResponseEntity<List<Register>> getAllRegisterByCpf(@PathVariable String cpf){
         return ResponseEntity.ok().body(registerService.getAllRegisterByCpf(cpf));

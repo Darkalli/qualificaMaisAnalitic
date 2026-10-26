@@ -78,6 +78,10 @@ public class RegisterService {
         registerRepository.save(register);
     }
 
+    public List<Register> getAllRegisters(){
+        return registerRepository.findAll();
+    }
+
     public List<Register> getAllRegisterByCpf(String cpfIn){
         required(cpfIn, "cpf");
         String cpf = formatCpf(cpfIn);

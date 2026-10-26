@@ -109,6 +109,32 @@ class RegisterServiceTests {
     }
 
     @Test
+    void listsAllRegistrationsWithoutChangingTheirStatus() {
+        var active = new Register(ServiceTestData.person(), course(3L), DAY, StatusRegister.ACTIVE);
+        var canceled = new Register(ServiceTestData.person(), course(4L), DAY, StatusRegister.CANCELED);
+        canceled.getPerson().setCpf("98765432100");
+        var results = List.of(active, canceled);
+        when(registers.findAll()).thenReturn(results);
+
+        assertEquals(results, service.getAllRegisters());
+        assertEquals(StatusRegister.ACTIVE, active.getStatus());
+        assertEquals(StatusRegister.CANCELED, canceled.getStatus());
+        verify(registers).findAll();
+        verifyNoMoreInteractions(registers);
+        verifyNoInteractions(people, courses);
+    }
+
+    @Test
+    void listsNoRegistrationsWhenRepositoryIsEmpty() {
+        when(registers.findAll()).thenReturn(List.of());
+
+        assertEquals(List.of(), service.getAllRegisters());
+        verify(registers).findAll();
+        verifyNoMoreInteractions(registers);
+        verifyNoInteractions(people, courses);
+    }
+
+    @Test
     void listsDifferentRegistrationsOfTheSamePerson() {
         var person = ServiceTestData.person();
         var results = List.of(new Register(person, course(3L), DAY, StatusRegister.ACTIVE), new Register(person, course(4L), DAY, StatusRegister.ACTIVE));
