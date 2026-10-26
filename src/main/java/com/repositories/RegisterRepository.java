@@ -19,4 +19,6 @@ public interface RegisterRepository extends JpaRepository<Register, Long> {
 
     @Query("select distinct r.person.cpf from Register r where r.courseOfInterest.id = :courseId and r.status = com.enums.StatusRegister.ACTIVE order by r.person.cpf")
     List<String> findPersonCpfsByCourseId(Long courseId);
+
+    void deleteByPerson_Id(Long personId);
 }

@@ -6,7 +6,10 @@ import com.entities.Address;
 import com.entities.Person;
 import com.enums.Disabilities;
 import com.mappers.PersonMapper;
+import com.repositories.AddressRepository;
 import com.repositories.PersonRepository;
+import com.repositories.PresenceRepository;
+import com.repositories.RegisterRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,14 +26,20 @@ import static com.utils.ValidationUtils.*;
 public class PersonService {
 
     private final PersonRepository personRepository;
+    private final RegisterRepository registerRepository;
+    private final AddressRepository addressRepository;
+    private final PresenceRepository presenceRepository;
     private final PersonMapper mapper;
 
-    public PersonService(PersonRepository personRepository, PersonMapper mapper) {
+    public PersonService(PersonRepository personRepository, RegisterRepository registerRepository, AddressRepository addressRepository, PresenceRepository presenceRepository, PersonMapper mapper) {
         this.personRepository = personRepository;
+        this.registerRepository = registerRepository;
+        this.addressRepository = addressRepository;
+        this.presenceRepository = presenceRepository;
         this.mapper = mapper;
     }
 
-    public Person addPerson (AddPersonDto addPerson){
+    public Person addPerson(AddPersonDto addPerson) {
         required(addPerson.fullName(), "fullName");
         required(addPerson.cpf(), "cpf");
         email(addPerson.email());
@@ -49,14 +58,14 @@ public class PersonService {
         Address address = new Address(addPerson.address().getNumber(),
                 addPerson.address().getStreet(), addPerson.address().getNeighborhood());
 
-        return personRepository.save(new Person(addPerson.fullName(), addPerson.socialName(), cpf ,
+        return personRepository.save(new Person(addPerson.fullName(), addPerson.socialName(), cpf,
                 addPerson.email(), cellphone, addPerson.personalPhoneHasWhatsapp(),
                 familyPhone, address, addPerson.gender(), addPerson.education(),
-                addPerson.workState(),newDisabilities));
+                addPerson.workState(), newDisabilities));
     }
 
     @Transactional
-    public Person updatePerson (UpdatePersonDto updatePerson){
+    public Person updatePerson(UpdatePersonDto updatePerson) {
         required(updatePerson.Cpf(), "Cpf");
         String cpf = formatCpf(updatePerson.Cpf());
         cpf = cleanCpf(cpf);
@@ -101,22 +110,27 @@ public class PersonService {
         return personRepository.save(person);
     }
 
-   public void deletePerson (Long id){
-       positiveId(id, "id");
-       Person person = personRepository.findById(id)
-               .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada"));
-       personRepository.delete(person);
-   }
+    @Transactional
+    public void deletePerson(Long id) {
+        positiveId(id, "id");
+        Person person = personRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada"));
+        Address address = person.getAddress();
+        presenceRepository.deleteByPerson_Id(person.getId());
+        registerRepository.deleteByPerson_Id(person.getId());
+        personRepository.delete(person);
+        addressRepository.delete(address);
+    }
 
-   public List<Person> getAllPerson (){
+    public List<Person> getAllPerson() {
         return personRepository.getAll();
-   }
+    }
 
-   public Person getByCpf (String cpf){
-       required(cpf, "cpf");
-       String formatedCpf = formatCpf(cpf);
-       formatedCpf = cleanCpf(formatedCpf);
+    public Person getByCpf(String cpf) {
+        required(cpf, "cpf");
+        String formatedCpf = formatCpf(cpf);
+        formatedCpf = cleanCpf(formatedCpf);
         return personRepository.findByCpf(formatedCpf)
                 .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada."));
-   }
+    }
 }

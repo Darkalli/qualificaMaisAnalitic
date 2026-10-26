@@ -5,7 +5,10 @@ import com.dtos.personDtos.AddPersonDto;
 import com.entities.Person;
 import com.enums.Disabilities;
 import com.mappers.PersonMapper;
+import com.repositories.AddressRepository;
 import com.repositories.PersonRepository;
+import com.repositories.PresenceRepository;
+import com.repositories.RegisterRepository;
 import com.services.PersonService;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,11 +31,14 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PersonTests {
     @Mock private PersonRepository repository;
+    @Mock private RegisterRepository registerRepository;
+    @Mock private PresenceRepository presenceRepository;
+    @Mock private AddressRepository addressRepository;
     private PersonService service;
 
     @BeforeEach
     void setUp() {
-        service = new PersonService(repository, Mappers.getMapper(PersonMapper.class));
+        service = new PersonService(repository, registerRepository, addressRepository, presenceRepository, Mappers.getMapper(PersonMapper.class));
     }
 
     @Test

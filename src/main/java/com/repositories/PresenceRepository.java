@@ -18,4 +18,6 @@ public interface PresenceRepository extends JpaRepository<Presence, Long> {
 
     boolean existsByPersonAndCourseClass(Person person, CourseClass courseClass);
     boolean existsByCourseClassId(Long courseClassId);
+
+    void deleteByPerson_Id(Long id);
 }
