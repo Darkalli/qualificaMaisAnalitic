@@ -20,7 +20,9 @@ import java.time.Clock;
 @EnableMethodSecurity
 @io.swagger.v3.oas.annotations.security.SecurityScheme(name = "bearerAuth",
         type = io.swagger.v3.oas.annotations.enums.SecuritySchemeType.HTTP, scheme = "bearer")
-@io.swagger.v3.oas.annotations.OpenAPIDefinition(security = @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth"))
+@io.swagger.v3.oas.annotations.OpenAPIDefinition(
+        info = @io.swagger.v3.oas.annotations.info.Info(title = "QualificaMaisAnalitic API", version = "0.0.1-SNAPSHOT"),
+        security = @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth"))
 public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {

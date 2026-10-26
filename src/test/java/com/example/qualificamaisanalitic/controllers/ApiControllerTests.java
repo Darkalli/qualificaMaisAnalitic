@@ -582,6 +582,16 @@ class ApiControllerTests {
     }
 
     @Test
+    void swaggerPublishesRequiredApiInfo() throws Exception {
+        mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.info").isMap())
+                .andExpect(jsonPath("$.info.title").isString())
+                .andExpect(jsonPath("$.info.title").value("QualificaMaisAnalitic API"))
+                .andExpect(jsonPath("$.info.version").isString())
+                .andExpect(jsonPath("$.info.version").value("0.0.1-SNAPSHOT"));
+    }
+
+    @Test
     void swaggerDescribesTheCurrentClassCreationContractAndServesItsUi() throws Exception {
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.components.schemas.AddCourseClassDto.properties.courseId.type").value("integer"))
@@ -592,9 +602,9 @@ class ApiControllerTests {
     }
 
     @Test
-    void registrationLookupNoLongerUsesGetOnTheBaseRoute() throws Exception {
+    void registrationBaseRouteListsRatherThanLookingUpByQueryParameters() throws Exception {
         mvc.perform(get("/api/register").param("cpf", "01234567890").param("courseId", "1"))
-                .andExpect(status().isMethodNotAllowed()).andExpect(jsonPath("$.status").value(405));
+                .andExpect(status().isOk()).andExpect(content().json("[]"));
     }
 
     @ParameterizedTest
