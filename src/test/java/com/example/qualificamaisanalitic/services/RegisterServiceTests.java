@@ -5,6 +5,7 @@ import com.dtos.registerDtos.SearchRegisterDto;
 import com.entities.Register;
 import com.enums.StatusRegister;
 import com.entities.Course;
+import com.enums.StatusCourse;
 import com.entities.CourseClass;
 import com.repositories.CourseRepository;
 import com.repositories.PersonRepository;
@@ -150,7 +151,7 @@ class RegisterServiceTests {
     }
 
     private Course course(long id) {
-        var course = new Course("Curso de exemplo", null, DAY, DAY.plusMonths(1));
+        var course = new Course("Curso de exemplo", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
         course.setId(id);
         return course;
     }

@@ -1,5 +1,7 @@
 package com.entities;
 
+import com.enums.StatusCourse;
+import com.enums.Period;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,14 +26,21 @@ public class Course {
     private String description;
     private LocalDate start;
     private LocalDate finish;
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32)
+    private Period period;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private StatusCourse statusCourse = StatusCourse.ACTIVE;
     @OneToMany(mappedBy = "course")
     private List<CourseClass> courseClass = new ArrayList<>();
 
-    public Course(String name,@Nullable String description, LocalDate start, LocalDate finish) {
+    public Course(String name,@Nullable String description, LocalDate start, LocalDate finish, StatusCourse statusCourse) {
         this.name = name;
         this.description = description;
         this.start = start;
         this.finish = finish;
+        this.statusCourse = statusCourse;
     }
 
     public Course() {

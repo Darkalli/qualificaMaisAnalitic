@@ -1,6 +1,7 @@
 package com.example.qualificamaisanalitic.utils;
 
 import com.entities.Course;
+import com.enums.StatusCourse;
 import com.entities.CourseClass;
 import com.entities.Register;
 import com.enums.StatusClass;
@@ -83,7 +84,7 @@ class RegisterUtilsTests {
     }
 
     private Register registration(Long courseId, Long registerId, int start, int finish, StatusRegister status) {
-        var course = new Course("Curso de exemplo", null, DAY, DAY.plusDays(1));
+        var course = new Course("Curso de exemplo", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE);
         course.setId(courseId);
         course.getCourseClass().add(new CourseClass(DAY, "Manhã", LocalTime.of(start, 0),
                 LocalTime.of(finish, 0), course));

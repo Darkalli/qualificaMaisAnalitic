@@ -2,6 +2,7 @@ package com.example.qualificamaisanalitic.controllers;
 
 import com.controlers.RegisterController;
 import com.entities.Course;
+import com.enums.StatusCourse;
 import com.entities.Person;
 import com.entities.Register;
 import com.enums.StatusRegister;
@@ -46,9 +47,9 @@ class RegisterControllerTests {
         var otherPerson = new Person();
         otherPerson.setCpf("98765432100");
         otherPerson.setFullName("Pessoa B");
-        var course = new Course("Curso A", null, day, day.plusMonths(1));
+        var course = new Course("Curso A", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
         course.setId(3L);
-        var otherCourse = new Course("Curso B", null, day, day.plusMonths(1));
+        var otherCourse = new Course("Curso B", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
         otherCourse.setId(4L);
         var active = new Register(person, course, day, StatusRegister.ACTIVE);
         active.setId(17L);

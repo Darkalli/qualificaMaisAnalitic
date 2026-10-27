@@ -3,9 +3,12 @@ package com.services;
 import com.dtos.CourseDtos.AddCourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.entities.Course;
+import com.enums.StatusCourse;
 import com.mappers.CourseMapper;
 import com.repositories.CourseRepository;
+import com.sheets.CourseCatalogChanged;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,17 +29,19 @@ public class CourseService {
         this.events = events;
     }
 
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public Course addCourse (AddCourseDto courseDto){
         required(courseDto.name(), "name");
         maxLength(courseDto.name(), 255, "name");
         maxLength(courseDto.description(), 255, "description");
         dateRange(courseDto.start(), courseDto.finish());
-        Course saved = courseRepository.save(new Course(courseDto.name(), courseDto.description(),courseDto.start(), courseDto.finish()));
-        events.publishEvent(new com.sheets.CourseCatalogChanged());
+        Course course = new Course(courseDto.name(), courseDto.description(), courseDto.start(), courseDto.finish(), StatusCourse.ACTIVE);
+        course.setPeriod(courseDto.period());
+        Course saved = courseRepository.save(course);
+        events.publishEvent(new CourseCatalogChanged());
         return saved;
     }
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public Course updateCourse (UpdateCourseDto courseDto){
         positiveId(courseDto.courseId(), "courseId");
         Course course = courseRepository.findByid(courseDto.courseId())
@@ -50,17 +55,29 @@ public class CourseService {
                 courseDto.finish() != null ? courseDto.finish() : course.getFinish());
         mapper.updateCoursefromDto(courseDto, course);
         Course saved = courseRepository.save(course);
-        events.publishEvent(new com.sheets.CourseCatalogChanged());
+        events.publishEvent(new CourseCatalogChanged());
         return saved;
     }
 
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
+    public Course updateCourseStatus (Long courseId){
+        Course course = courseRepository.findByid(courseId)
+                .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
+        if(course.getStatusCourse() == StatusCourse.ACTIVE){
+            course.setStatusCourse(StatusCourse.CLOSED);
+        }else{
+            course.setStatusCourse(StatusCourse.ACTIVE);
+        }
+        return courseRepository.save(course);
+    }
+
+    @Transactional
     public void deleteCourse(Long courseId){
         positiveId(courseId, "id");
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
-        courseRepository.delete(course);
-        events.publishEvent(new com.sheets.CourseCatalogChanged());
+        course.setStatusCourse(StatusCourse.CANCELED);
+        events.publishEvent(new CourseCatalogChanged());
     }
 
     public List<Course> getAllCourses(){

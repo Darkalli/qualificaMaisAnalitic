@@ -10,6 +10,7 @@ import com.dtos.presenceDtos.PresenceByDayAndCourseDto;
 import com.dtos.presenceDtos.PresenceUpdateDto;
 import com.dtos.registerDtos.AddRegisterDto;
 import com.entities.Course;
+import com.enums.StatusCourse;
 import com.entities.CourseClass;
 import com.entities.Person;
 import com.enums.Disabilities;
@@ -120,8 +121,8 @@ class ServicesPersistenceTests {
         String cpf = "76543210900";
         people.addPerson(ServiceTestData.addPerson(cpf, "11999990000", null));
         var personId = people.getByCpf(cpf).getId();
-        var firstCourse = new Course("Informática", null, DAY, DAY.plusMonths(1));
-        var secondCourse = new Course("Inglês", null, DAY, DAY.plusMonths(1));
+        var firstCourse = new Course("Informática", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
+        var secondCourse = new Course("Inglês", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
         entityManager.persist(firstCourse);
         entityManager.persist(secondCourse);
         registers.addRegister(new AddRegisterDto(cpf, firstCourse.getId(), DAY));
@@ -140,8 +141,8 @@ class ServicesPersistenceTests {
     @Test
     void attendanceServicesPersistAndUpdateOnlySelectedCourse() {
         var person = PersonTestData.person("65432109800");
-        var firstCourse = new Course("Curso A", null, DAY, DAY.plusMonths(1));
-        var secondCourse = new Course("Curso B", null, DAY, DAY.plusMonths(1));
+        var firstCourse = new Course("Curso A", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
+        var secondCourse = new Course("Curso B", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
         entityManager.persist(person);
         entityManager.persist(firstCourse);
         entityManager.persist(secondCourse);

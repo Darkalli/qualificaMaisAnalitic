@@ -1,10 +1,12 @@
 package com.dtos.CourseDtos;
 
-import com.entities.CourseClass;
+import com.enums.Period;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 
 public record AddCourseDto(String name, String description,
-                           LocalDate start, LocalDate finish) {
+                           LocalDate start, LocalDate finish, Period period) {
+    public AddCourseDto(String name, String description, LocalDate start, LocalDate finish) {
+        this(name, description, start, finish, null);
+    }
 }

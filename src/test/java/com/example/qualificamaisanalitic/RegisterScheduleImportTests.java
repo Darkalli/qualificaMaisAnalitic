@@ -4,6 +4,7 @@ import com.dtos.registerDtos.AddRegisterDto;
 import com.entities.Course;
 import com.entities.CourseClass;
 import com.entities.Register;
+import com.enums.StatusCourse;
 import com.repositories.CourseClassRepository;
 import com.repositories.CourseRepository;
 import com.repositories.PersonRepository;
@@ -48,8 +49,8 @@ class RegisterScheduleImportTests {
     @BeforeEach
     void prepareCatalog() {
         clearDatabase();
-        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusMonths(1)));
-        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusMonths(1)));
+        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusMonths(1),StatusCourse.ACTIVE));
+        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE));
         addClass(first, DAY, 8, 10);
     }
 

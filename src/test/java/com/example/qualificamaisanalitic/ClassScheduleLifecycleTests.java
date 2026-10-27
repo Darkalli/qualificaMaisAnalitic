@@ -8,6 +8,7 @@ import com.entities.Course;
 import com.entities.CourseClass;
 import com.enums.PresenceStatus;
 import com.enums.StatusClass;
+import com.enums.StatusCourse;
 import com.repositories.*;
 import com.services.CourseClassService;
 import com.services.PresenceService;
@@ -49,8 +50,8 @@ class ClassScheduleLifecycleTests {
     @BeforeEach
     void prepare() {
         clearDatabase();
-        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(10)));
-        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(10)));
+        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
+        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
         personId = people.saveAndFlush(PersonTestData.person(CPF)).getId();
     }
 

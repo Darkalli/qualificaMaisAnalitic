@@ -4,6 +4,7 @@ import com.sheets.*;
 import com.entities.Register;
 import com.enums.StatusRegister;
 import com.entities.Course;
+import com.enums.StatusCourse;
 import com.repositories.CourseRepository;
 import jakarta.persistence.EntityNotFoundException;
 import com.enums.Disabilities;
@@ -49,8 +50,8 @@ class RegisterPersistenceTests {
         jdbc.update("delete from person");
         jdbc.update("delete from address");
         jdbc.update("delete from course");
-        firstCourseId = courses.saveAndFlush(new Course("Informática", "Descrição original", null, null)).getId();
-        secondCourseId = courses.saveAndFlush(new Course("Inglês", null, null, null)).getId();
+        firstCourseId = courses.saveAndFlush(new Course("Informática", "Descrição original", null, null, StatusCourse.ACTIVE)).getId();
+        secondCourseId = courses.saveAndFlush(new Course("Inglês", null, null, null, StatusCourse.ACTIVE)).getId();
     }
 
     @Test

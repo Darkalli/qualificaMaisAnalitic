@@ -4,6 +4,7 @@ import com.dtos.CourseDtos.AddCourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.entities.Course;
 import com.entities.CourseClass;
+import com.enums.StatusCourse;
 import com.mappers.CourseMapper;
 import com.repositories.CourseRepository;
 import com.services.CourseService;
@@ -69,7 +70,7 @@ class CourseServiceTests {
 
     @Test
     void partialUpdatePreservesIdentityDatesAndClasses() {
-        var course = new Course("Informática", "Descrição", START, START.plusMonths(1));
+        var course = new Course("Informática", "Descrição", START, START.plusMonths(1), StatusCourse.ACTIVE);
         course.setId(3L);
         var courseClass = new CourseClass(START, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         course.getCourseClass().add(courseClass);
@@ -86,7 +87,7 @@ class CourseServiceTests {
 
     @Test
     void updatesAllProvidedCourseFields() {
-        var course = new Course("Antigo", null, START, START);
+        var course = new Course("Antigo", null, START, START,StatusCourse.ACTIVE);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
         service.updateCourse(new UpdateCourseDto(3L, "Novo", "Descrição", START.plusDays(1), START.plusMonths(2)));
         assertEquals("Novo", course.getName());
@@ -106,7 +107,7 @@ class CourseServiceTests {
 
     @Test
     void listsAndFindsCoursesIncludingAbsentName() {
-        var course = new Course("Informática", null, START, START);
+        var course = new Course("Informática", null, START, START,StatusCourse.ACTIVE);
         when(repository.findAll()).thenReturn(List.of(course));
         when(repository.findByName("Informática")).thenReturn(Optional.of(course));
         when(repository.findByName("Ausente")).thenReturn(Optional.empty());
@@ -116,10 +117,13 @@ class CourseServiceTests {
     }
 
     @Test
-    void deletesTheRequestedCourse() {
-        var course = new Course();
+    void cancelsTheRequestedCourseWithoutDeletingIt() {
+        var course = new Course("Informática", null, START, START, StatusCourse.ACTIVE);
+        course.setId(3L);
         when(repository.findById(3L)).thenReturn(Optional.of(course));
         service.deleteCourse(3L);
-        verify(repository).delete(course);
+        assertEquals(StatusCourse.CANCELED, course.getStatusCourse());
+        assertEquals(3L, course.getId());
+        verify(repository, never()).delete(any(Course.class));
     }
 }

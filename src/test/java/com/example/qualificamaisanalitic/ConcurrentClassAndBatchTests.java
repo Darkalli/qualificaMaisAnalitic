@@ -5,6 +5,7 @@ import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.dtos.presenceDtos.AddPresenceDto;
 import com.dtos.registerDtos.AddRegisterDto;
 import com.entities.Course;
+import com.enums.StatusCourse;
 import com.entities.CourseClass;
 import com.enums.PresenceStatus;
 import com.enums.StatusClass;
@@ -57,8 +58,8 @@ class ConcurrentClassAndBatchTests {
     @BeforeEach
     void prepare() {
         clearDatabase();
-        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(10)));
-        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(10)));
+        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
+        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
     }
 
     @AfterEach

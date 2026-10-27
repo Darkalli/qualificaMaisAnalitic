@@ -9,6 +9,7 @@ import com.entities.Course;
 import com.entities.CourseClass;
 import com.entities.Register;
 import com.enums.PresenceStatus;
+import com.enums.StatusCourse;
 import com.enums.StatusRegister;
 import com.exceptions.ConflictException;
 import com.repositories.*;
@@ -61,8 +62,8 @@ class RegistrationStatusLifecycleTests {
     @BeforeEach
     void prepare() {
         clearDatabase();
-        first = courses.saveAndFlush(new Course("A", null, DAY, DAY.plusDays(10)));
-        second = courses.saveAndFlush(new Course("B", null, DAY, DAY.plusDays(10)));
+        first = courses.saveAndFlush(new Course("A", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
+        second = courses.saveAndFlush(new Course("B", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
         personId = people.saveAndFlush(PersonTestData.person(CPF)).getId();
     }
 

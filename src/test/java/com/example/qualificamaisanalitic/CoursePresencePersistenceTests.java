@@ -1,6 +1,7 @@
 package com.example.qualificamaisanalitic;
 
 import com.entities.Course;
+import com.enums.StatusCourse;
 import com.entities.CourseClass;
 import com.entities.Presence;
 import com.enums.PresenceStatus;
@@ -29,8 +30,8 @@ class CoursePresencePersistenceTests {
         var day = LocalDate.of(2026, 9, 29);
         var person = PersonTestData.person("98765432100");
         entityManager.persist(person);
-        var course = new Course("Informática", "Curso de exemplo", day, day.plusMonths(1));
-        var otherCourse = new Course("Inglês", null, day, day.plusMonths(1));
+        var course = new Course("Informática", "Curso de exemplo", day, day.plusMonths(1), StatusCourse.ACTIVE);
+        var otherCourse = new Course("Inglês", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
         entityManager.persist(course);
         entityManager.persist(otherCourse);
         var courseClass = new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
@@ -82,7 +83,7 @@ class CoursePresencePersistenceTests {
     void databaseRejectsDuplicateAttendanceForPersonAndClass() {
         var day = LocalDate.of(2026, 9, 29);
         var person = PersonTestData.person("98765432100");
-        var course = new Course("Informática", null, day, day.plusMonths(1));
+        var course = new Course("Informática", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
         entityManager.persist(person);
         entityManager.persist(course);
         var courseClass = new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);

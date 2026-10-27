@@ -30,6 +30,10 @@ public class CourseController {
     public ResponseEntity<Course> updateCourse(@RequestBody UpdateCourseDto updateCourseDto){
         return ResponseEntity.ok().body(courseService.updateCourse(updateCourseDto));
     }
+    @PatchMapping("/{id}")
+    public ResponseEntity<Course> updateCourse(@PathVariable Long id){
+        return ResponseEntity.ok().body(courseService.updateCourseStatus(id));
+    }
 
     @DeleteMapping("/course/{id}")
     public ResponseEntity<Void> deleteCourse(@PathVariable Long id){

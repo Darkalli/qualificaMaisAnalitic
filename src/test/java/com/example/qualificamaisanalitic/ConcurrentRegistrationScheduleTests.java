@@ -2,6 +2,7 @@ package com.example.qualificamaisanalitic;
 
 import com.dtos.registerDtos.AddRegisterDto;
 import com.entities.Course;
+import com.enums.StatusCourse;
 import com.entities.CourseClass;
 import com.repositories.CourseClassRepository;
 import com.repositories.CourseRepository;
@@ -52,8 +53,8 @@ class ConcurrentRegistrationScheduleTests {
     @BeforeEach
     void prepareCatalog() {
         clearDatabase();
-        firstCourse = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(1)));
-        secondCourse = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(1)));
+        firstCourse = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE));
+        secondCourse = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE));
         classes.saveAndFlush(new CourseClass(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), firstCourse));
     }
 
