@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic.services;
 
+import com.enums.Period;
 import com.dtos.courseClassesDtos.AddCourseClassDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.entities.Course;
@@ -49,14 +50,14 @@ class CourseClassServiceTests {
         var course = course(3L);
         course.setId(3L);
         when(courses.findByid(3L)).thenReturn(Optional.of(course));
-        service.addCourseClass(new AddCourseClassDto(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
+        service.addCourseClass(new AddCourseClassDto(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
         var capture = ArgumentCaptor.forClass(CourseClass.class);
         verify(classes).save(capture.capture());
         var saved = capture.getValue();
         assertNull(saved.getId());
         assertSame(course, saved.getCourse());
         assertEquals(DAY, saved.getDay());
-        assertEquals("Manhã", saved.getSession());
+        assertEquals(Period.MORNING, saved.getSession());
         assertEquals(LocalTime.of(8, 0), saved.getStart());
         assertEquals(LocalTime.of(10, 0), saved.getFinish());
     }
@@ -64,14 +65,14 @@ class CourseClassServiceTests {
     @Test
     void partialUpdateChangesTimesWithoutErasingDayCourseOrId() {
         var course = course(3L);
-        var saved = new CourseClass(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
+        var saved = new CourseClass(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         saved.setId(4L);
         when(classes.findById(4L)).thenReturn(Optional.of(saved));
-        service.updateCourseClass(new UpdateCourseClassDto(4L, null, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), null));
+        service.updateCourseClass(new UpdateCourseClassDto(4L, null, Period.AFTERNOON, LocalTime.of(14, 0), LocalTime.of(16, 0), null));
         assertEquals(4L, saved.getId());
         assertSame(course, saved.getCourse());
         assertEquals(DAY, saved.getDay());
-        assertEquals("Tarde", saved.getSession());
+        assertEquals(Period.AFTERNOON, saved.getSession());
         assertEquals(LocalTime.of(14, 0), saved.getStart());
         assertEquals(LocalTime.of(16, 0), saved.getFinish());
         verify(classes).save(saved);
@@ -79,13 +80,13 @@ class CourseClassServiceTests {
 
     @Test
     void changesCourseAndDayWhenProvided() {
-        var saved = new CourseClass(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course(3L));
+        var saved = new CourseClass(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course(3L));
         var replacement = course(5L);
         when(classes.findById(4L)).thenReturn(Optional.of(saved));
         service.updateCourseClass(new UpdateCourseClassDto(4L, DAY.plusDays(1), null, null, null, replacement));
         assertSame(replacement, saved.getCourse());
         assertEquals(DAY.plusDays(1), saved.getDay());
-        assertEquals("Manhã", saved.getSession());
+        assertEquals(Period.MORNING, saved.getSession());
         verify(classes).save(saved);
     }
 
@@ -102,7 +103,7 @@ class CourseClassServiceTests {
     @Test
     void listsOnlyClassesOfRequestedCourseAndDeletesRequestedClass() {
         var course = course(3L);
-        var courseClass = new CourseClass(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
+        var courseClass = new CourseClass(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         when(courses.findByid(3L)).thenReturn(Optional.of(course));
         when(classes.findByCourse(course)).thenReturn(List.of(courseClass));
         when(classes.findById(4L)).thenReturn(Optional.of(courseClass));
@@ -128,7 +129,7 @@ class CourseClassServiceTests {
         when(classes.existsByCourseAndDay(course, DAY)).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> service.addCourseClass(
-                new AddCourseClassDto(DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), course.getId())));
+                new AddCourseClassDto(DAY, Period.AFTERNOON, LocalTime.of(14, 0), LocalTime.of(16, 0), course.getId())));
 
         verify(classes, never()).save(any());
     }
@@ -137,17 +138,17 @@ class CourseClassServiceTests {
     void refusesMovingClassToAnOccupiedCourseAndDayWithoutSaving() {
         var course = course(3L);
         course.setId(3L);
-        var saved = new CourseClass(DAY.minusDays(1), "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
+        var saved = new CourseClass(DAY.minusDays(1), Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         saved.setId(4L);
         when(classes.findById(4L)).thenReturn(Optional.of(saved));
         when(classes.existsByCourseAndDayAndIdNot(course, DAY, 4L)).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> service.updateCourseClass(
-                new UpdateCourseClassDto(4L, DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), course)));
+                new UpdateCourseClassDto(4L, DAY, Period.AFTERNOON, LocalTime.of(14, 0), LocalTime.of(16, 0), course)));
 
         verify(classes, never()).save(any());
         assertEquals(DAY.minusDays(1), saved.getDay());
-        assertEquals("Manhã", saved.getSession());
+        assertEquals(Period.MORNING, saved.getSession());
     }
     private Course course(long id) {
         var course = new Course();

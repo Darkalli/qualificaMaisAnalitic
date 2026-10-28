@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic;
 
+import com.enums.Period;
 import com.entities.Course;
 import com.enums.StatusCourse;
 import com.entities.CourseClass;
@@ -34,9 +35,9 @@ class CoursePresencePersistenceTests {
         var otherCourse = new Course("Inglês", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
         entityManager.persist(course);
         entityManager.persist(otherCourse);
-        var courseClass = new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
+        var courseClass = new CourseClass(day, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         entityManager.persist(courseClass);
-        var otherClass = new CourseClass(day, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), otherCourse);
+        var otherClass = new CourseClass(day, Period.AFTERNOON, LocalTime.of(14, 0), LocalTime.of(16, 0), otherCourse);
         entityManager.persist(otherClass);
         var attendance = new Presence(person, courseClass, course, PresenceStatus.PRESENT);
         var otherAttendance = new Presence(person, otherClass, otherCourse, PresenceStatus.ABSENT);
@@ -86,7 +87,7 @@ class CoursePresencePersistenceTests {
         var course = new Course("Informática", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
         entityManager.persist(person);
         entityManager.persist(course);
-        var courseClass = new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
+        var courseClass = new CourseClass(day, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         entityManager.persist(courseClass);
         presences.saveAndFlush(new Presence(person, courseClass, course, PresenceStatus.PRESENT));
         var otherPerson = PersonTestData.person("12345678901");

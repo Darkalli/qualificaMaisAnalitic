@@ -1,5 +1,6 @@
 package com.entities;
 
+import com.enums.Period;
 import com.enums.StatusClass;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
@@ -22,8 +23,9 @@ public class CourseClass {
 
     @Column(name = "class_day", nullable = false)
     private LocalDate day;
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String session;
+    private Period session;
     @Column(nullable = false)
     private LocalTime start;
     @Column(nullable = false)
@@ -36,11 +38,11 @@ public class CourseClass {
     @Column(name = "status_class", nullable = false)
     private StatusClass statusClass = StatusClass.ACTIVE;
 
-    public CourseClass(LocalDate day, String session, LocalTime start, LocalTime finish, Course course) {
+    public CourseClass(LocalDate day, Period session, LocalTime start, LocalTime finish, Course course) {
         this(day, session, start, finish, course, StatusClass.ACTIVE);
     }
 
-    public CourseClass(LocalDate day, String session, LocalTime start, LocalTime finish, Course course,  StatusClass statusClass) {
+    public CourseClass(LocalDate day, Period session, LocalTime start, LocalTime finish, Course course,  StatusClass statusClass) {
         this.day = day;
         this.session = session;
         this.start = start;

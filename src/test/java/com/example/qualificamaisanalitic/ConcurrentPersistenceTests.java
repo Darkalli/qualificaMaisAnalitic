@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic;
 
+import com.enums.Period;
 import com.entities.Course;
 import com.enums.StatusCourse;
 import com.entities.CourseClass;
@@ -44,7 +45,7 @@ class ConcurrentPersistenceTests {
         var day = LocalDate.of(2026, 10, 1);
         var person = PersonTestData.person("10987654321");
         var course = new Course("Curso de concorrência", null, day, day.plusDays(1), StatusCourse.ACTIVE);
-        var courseClass = new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
+        var courseClass = new CourseClass(day, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         transactions.executeWithoutResult(status -> {
             people.saveAndFlush(person);
             courses.saveAndFlush(course);
@@ -66,7 +67,7 @@ class ConcurrentPersistenceTests {
                         } else if (table.equals("presence")) {
                             presences.saveAndFlush(new Presence(person, courseClass, course, PresenceStatus.PRESENT));
                         } else {
-                            classes.saveAndFlush(new CourseClass(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course));
+                            classes.saveAndFlush(new CourseClass(day, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course));
                         }
                     });
                     return true;

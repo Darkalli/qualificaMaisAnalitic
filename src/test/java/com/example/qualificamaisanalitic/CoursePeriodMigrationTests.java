@@ -33,7 +33,7 @@ class CoursePeriodMigrationTests {
 
     @Test
     void addsPeriodWithoutInventingAValueOrChangingExistingCourseData() {
-        var flyway = Flyway.configure().dataSource(dataSource).load();
+        var flyway = Flyway.configure().dataSource(dataSource).target("7").load();
         assertEquals(1, flyway.migrate().migrationsExecuted);
         assertNull(jdbc.queryForObject("select period from course where id = 701", String.class));
         assertEquals("Curso existente", jdbc.queryForObject("select name from course where id = 701", String.class));
@@ -46,7 +46,7 @@ class CoursePeriodMigrationTests {
 
     @Test
     void acceptsTheFilterPeriodsAndRejectsUnknownValues() {
-        Flyway.configure().dataSource(dataSource).load().migrate();
+        Flyway.configure().dataSource(dataSource).target("7").load().migrate();
         for (String period : new String[]{"MORNING", "AFTERNOON", "NIGHT"}) {
             jdbc.update("update course set period = ? where id = 701", period);
             assertEquals(period, jdbc.queryForObject("select period from course where id = 701", String.class));

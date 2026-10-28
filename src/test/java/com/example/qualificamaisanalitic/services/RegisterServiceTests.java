@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic.services;
 
+import com.enums.Period;
 import com.dtos.registerDtos.AddRegisterDto;
 import com.dtos.registerDtos.SearchRegisterDto;
 import com.entities.Register;
@@ -394,6 +395,6 @@ class RegisterServiceTests {
     }
 
     private void addClass(Course course, LocalDate day, int start, int finish) {
-        course.getCourseClass().add(new CourseClass(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course));
+        course.getCourseClass().add(new CourseClass(day, Period.MORNING, LocalTime.of(start, 0), LocalTime.of(finish, 0), course));
     }
 }

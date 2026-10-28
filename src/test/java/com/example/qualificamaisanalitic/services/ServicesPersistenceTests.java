@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic.services;
 
+import com.enums.Period;
 import com.dtos.CourseDtos.AddCourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.dtos.courseClassesDtos.AddCourseClassDto;
@@ -53,12 +54,12 @@ class ServicesPersistenceTests {
     void createsUpdatesQueriesAndDeletesCourseAndClassThroughServices() {
         courses.addCourse(new AddCourseDto("Curso de teste", "Descrição", DAY, DAY.plusMonths(1)));
         var course = courses.getCourseByName("Curso de teste");
-        classes.addCourseClass(new AddCourseClassDto(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
+        classes.addCourseClass(new AddCourseClassDto(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
         entityManager.flush();
         entityManager.clear();
         var courseClass = classes.allClassesByCourseId(course.getId()).getFirst();
         courses.updateCourse(new UpdateCourseDto(course.getId(), "Curso atualizado", null, null, null));
-        classes.updateCourseClass(new UpdateCourseClassDto(courseClass.getId(), null, "Tarde",
+        classes.updateCourseClass(new UpdateCourseClassDto(courseClass.getId(), null, Period.AFTERNOON,
                 LocalTime.of(14, 0), LocalTime.of(16, 0), null));
         entityManager.flush();
         entityManager.clear();
@@ -68,7 +69,7 @@ class ServicesPersistenceTests {
         assertEquals(DAY, savedCourse.getStart());
         var savedClass = savedCourse.getCourseClass().getFirst();
         assertEquals(courseClass.getId(), savedClass.getId());
-        assertEquals("Tarde", savedClass.getSession());
+        assertEquals(Period.AFTERNOON, savedClass.getSession());
         assertEquals(LocalTime.of(14, 0), savedClass.getStart());
         assertEquals(LocalTime.of(16, 0), savedClass.getFinish());
         classes.deleteCourseClass(savedClass.getId());
@@ -146,8 +147,8 @@ class ServicesPersistenceTests {
         entityManager.persist(person);
         entityManager.persist(firstCourse);
         entityManager.persist(secondCourse);
-        var firstClass = new CourseClass(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), firstCourse);
-        var secondClass = new CourseClass(DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), secondCourse);
+        var firstClass = new CourseClass(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), firstCourse);
+        var secondClass = new CourseClass(DAY, Period.AFTERNOON, LocalTime.of(14, 0), LocalTime.of(16, 0), secondCourse);
         entityManager.persist(firstClass);
         entityManager.persist(secondClass);
         registers.addRegister(new AddRegisterDto(person.getCpf(), firstCourse.getId(), DAY));

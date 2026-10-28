@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic.services;
 
+import com.enums.Period;
 import com.dtos.CourseDtos.AddCourseDto;
 import com.dtos.courseClassesDtos.AddCourseClassDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
@@ -37,7 +38,7 @@ class CourseClassDailyRuleTests {
         flushAndClear();
 
         assertThrows(IllegalArgumentException.class, () -> classes.addCourseClass(
-                new AddCourseClassDto(DAY, "Tarde", LocalTime.of(14, 0), LocalTime.of(16, 0), first.getId())));
+                new AddCourseClassDto(DAY, Period.AFTERNOON, LocalTime.of(14, 0), LocalTime.of(16, 0), first.getId())));
         addClass(second, DAY);
         addClass(first, DAY.plusDays(1));
         flushAndClear();
@@ -52,12 +53,12 @@ class CourseClassDailyRuleTests {
         var original = addClass(course, DAY);
         flushAndClear();
 
-        classes.updateCourseClass(new UpdateCourseClassDto(original.getId(), DAY, "Tarde",
+        classes.updateCourseClass(new UpdateCourseClassDto(original.getId(), DAY, Period.AFTERNOON,
                 LocalTime.of(14, 0), LocalTime.of(16, 0), course));
         flushAndClear();
 
         var saved = entityManager.find(CourseClass.class, original.getId());
-        assertEquals("Tarde", saved.getSession());
+        assertEquals(Period.AFTERNOON, saved.getSession());
         assertEquals(LocalTime.of(14, 0), saved.getStart());
         assertEquals(1, classes.allClassesByCourseId(course.getId()).size());
     }
@@ -76,7 +77,7 @@ class CourseClassDailyRuleTests {
         var saved = entityManager.find(CourseClass.class, original.getId());
         assertEquals(tomorrow, saved.getDay());
         assertEquals(course.getId(), saved.getCourse().getId());
-        assertEquals("Manhã", saved.getSession());
+        assertEquals(Period.MORNING, saved.getSession());
     }
 
     @Test
@@ -88,12 +89,12 @@ class CourseClassDailyRuleTests {
         flushAndClear();
 
         assertThrows(IllegalArgumentException.class, () -> classes.updateCourseClass(
-                new UpdateCourseClassDto(original.getId(), null, "Não salvar", null, null, second)));
+                new UpdateCourseClassDto(original.getId(), null, Period.AFTERNOON, null, null, second)));
         flushAndClear();
 
         var saved = entityManager.find(CourseClass.class, original.getId());
         assertEquals(first.getId(), saved.getCourse().getId());
-        assertEquals("Manhã", saved.getSession());
+        assertEquals(Period.MORNING, saved.getSession());
     }
 
     @Test
@@ -104,12 +105,12 @@ class CourseClassDailyRuleTests {
         flushAndClear();
 
         assertThrows(IllegalArgumentException.class, () -> classes.updateCourseClass(
-                new UpdateCourseClassDto(original.getId(), DAY.plusDays(1), "Não salvar", null, null, null)));
+                new UpdateCourseClassDto(original.getId(), DAY.plusDays(1), Period.AFTERNOON, null, null, null)));
         flushAndClear();
 
         var saved = entityManager.find(CourseClass.class, original.getId());
         assertEquals(DAY, saved.getDay());
-        assertEquals("Manhã", saved.getSession());
+        assertEquals(Period.MORNING, saved.getSession());
     }
 
     @Test
@@ -134,7 +135,7 @@ class CourseClassDailyRuleTests {
     }
 
     private CourseClass addClass(Course course, LocalDate day) {
-        return classes.addCourseClass(new AddCourseClassDto(day, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
+        return classes.addCourseClass(new AddCourseClassDto(day, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
     }
 
     private void flushAndClear() {

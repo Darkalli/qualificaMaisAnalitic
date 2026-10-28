@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic.services;
 
+import com.enums.Period;
 import com.dtos.presenceDtos.*;
 import com.entities.Course;
 import com.entities.CourseClass;
@@ -171,6 +172,6 @@ class PresenceServiceTests {
 
     private CourseClass courseClass(Course course) {
         course.setId(5L);
-        return new CourseClass(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
+        return new CourseClass(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
     }
 }

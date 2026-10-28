@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic.services;
 
+import com.enums.Period;
 import com.dtos.CourseDtos.AddCourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.entities.Course;
@@ -72,7 +73,7 @@ class CourseServiceTests {
     void partialUpdatePreservesIdentityDatesAndClasses() {
         var course = new Course("Informática", "Descrição", START, START.plusMonths(1), StatusCourse.ACTIVE);
         course.setId(3L);
-        var courseClass = new CourseClass(START, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), course);
+        var courseClass = new CourseClass(START, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         course.getCourseClass().add(courseClass);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
         service.updateCourse(new UpdateCourseDto(3L, "Informática básica", null, null, null));

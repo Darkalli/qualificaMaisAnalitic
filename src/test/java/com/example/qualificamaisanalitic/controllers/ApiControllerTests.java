@@ -99,8 +99,8 @@ class ApiControllerTests {
         long otherId = id(createCourse("Outro curso"));
         long classId = id(createClass(courseId));
         mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON)
-                        .content("{\"classId\":" + classId + ",\"session\":\"Tarde\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.session").value("Tarde"))
+                        .content("{\"classId\":" + classId + ",\"session\":\"AFTERNOON\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.session").value("AFTERNOON"))
                 .andExpect(jsonPath("$.day").value("2026-10-01"))
                 .andExpect(jsonPath("$.course.id").value(courseId));
         mvc.perform(get("/api/courseClass/courseClass/{courseId}", courseId))
@@ -517,7 +517,7 @@ class ApiControllerTests {
                         .content("{\"classId\":%d,\"finish\":\"08:00:00\"}".formatted(classId)))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
         mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
-                {"day":"2026-10-01","session":"Tarde","start":"14:00:00","finish":"16:00:00","courseId":%d}
+                {"day":"2026-10-01","session":"AFTERNOON","start":"14:00:00","finish":"16:00:00","courseId":%d}
                 """.formatted(courseId)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409));
         assertEquals(1, jdbc.queryForObject("select count(*) from course_class", Integer.class));
@@ -566,7 +566,7 @@ class ApiControllerTests {
     @Test
     void classCreationDistinguishesMissingAndUnknownCourseId() throws Exception {
         String body = """
-                {"day":"2026-10-02","session":"Tarde","start":"10:00:00","finish":"14:00:00"%s}
+                {"day":"2026-10-02","session":"AFTERNOON","start":"10:00:00","finish":"14:00:00"%s}
                 """;
         mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content(body.formatted("")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("O campo 'courseId' é obrigatório."));
@@ -657,7 +657,7 @@ class ApiControllerTests {
 
     private ResultActions createClass(long courseId, int start, int finish) throws Exception {
         return mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
-                {"day":"2026-10-01","session":"Sessão","start":"%02d:00:00",
+                {"day":"2026-10-01","session":"MORNING","start":"%02d:00:00",
                  "finish":"%02d:00:00","courseId":%d}
                 """.formatted(start, finish, courseId))).andExpect(status().isCreated());
     }
@@ -731,27 +731,52 @@ class ApiControllerTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.start").value("2026-11-01"));
     }
 
-    @Test
-    void classSessionLimitAppliesToCreationAndPatch() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"UNKNOWN", "Manhã", "Tarde", "Noite", "morning", "NIGHTLY", "Sessão", "", "   "})
+    void invalidClassSessionRejectsCreationAndPatchWithoutPartialChanges(String invalid) throws Exception {
         long courseId = id(createCourse("Curso"));
         String body = """
                 {"day":"2026-10-01","session":"%s","start":"08:00:00","finish":"10:00:00","courseId":%d}
                 """;
-        mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content(body.formatted("s".repeat(256), courseId)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("O campo 'session' deve ter no máximo 255 caracteres."));
-        assertEquals(0, jdbc.queryForObject("select count(*) from course_class", Integer.class));
+        for (String rejected : List.of(invalid, "s".repeat(255), "s".repeat(256))) {
+            mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content(body.formatted(rejected, courseId)))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.message").isNotEmpty());
+            assertEquals(0, jdbc.queryForObject("select count(*) from course_class", Integer.class));
+        }
         long classId = id(mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON)
-                .content(body.formatted("s".repeat(255), courseId))).andExpect(status().isCreated()));
-        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON).content(
-                        "{\"classId\":%d,\"session\":\"%s\",\"day\":\"2026-10-02\"}".formatted(classId, "s".repeat(256))))
-                .andExpect(status().isBadRequest());
+                .content(body.formatted("MORNING", courseId))).andExpect(status().isCreated()));
+        var before = jdbc.queryForMap("select * from course_class where id = ?", classId);
+        for (String rejected : List.of(invalid, "s".repeat(255), "s".repeat(256))) {
+            mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON).content(
+                            "{\"classId\":%d,\"session\":\"%s\",\"day\":\"2026-10-02\"}".formatted(classId, rejected)))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+            assertEquals(before, jdbc.queryForMap("select * from course_class where id = ?", classId));
+        }
         mvc.perform(get("/api/courseClass/courseClass/{id}", courseId))
                 .andExpect(jsonPath("$[0].day").value("2026-10-01"))
-                .andExpect(jsonPath("$[0].session").value("s".repeat(255)));
+                .andExpect(jsonPath("$[0].session").value("MORNING"));
         mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON).content(
-                        "{\"classId\":%d,\"session\":\"%s\"}".formatted(classId, "t".repeat(255))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.session").value("t".repeat(255)));
+                        "{\"classId\":%d,\"session\":\"AFTERNOON\"}".formatted(classId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.session").value("AFTERNOON"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MORNING", "AFTERNOON", "NIGHT"})
+    void classSessionUsesEnumWireNamesAndNullPatchPreservesSession(String session) throws Exception {
+        long courseId = id(createCourse("Curso"));
+        long classId = id(mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
+                {"day":"2026-10-01","session":"%s","start":"08:00:00","finish":"10:00:00","courseId":%d}
+                """.formatted(session, courseId)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.session").value(session)));
+        assertEquals(session, jdbc.queryForObject("select session from course_class where id = ?", String.class, classId));
+        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON)
+                        .content("{\"classId\":%d,\"session\":null,\"day\":\"2026-10-02\"}".formatted(classId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.session").value(session))
+                .andExpect(jsonPath("$.day").value("2026-10-02"));
+        mvc.perform(patch("/api/courseClass").contentType(APPLICATION_JSON)
+                        .content("{\"classId\":%d,\"session\":\"%s\"}".formatted(classId, session)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.session").value(session));
     }
 
     @ParameterizedTest
@@ -898,7 +923,7 @@ class ApiControllerTests {
 
     private ResultActions createClass(long courseId) throws Exception {
         return mvc.perform(post("/api/courseClass").contentType(APPLICATION_JSON).content("""
-                {"day":"2026-10-01","session":"Manhã","start":"08:00:00",
+                {"day":"2026-10-01","session":"MORNING","start":"08:00:00",
                  "finish":"10:00:00","courseId":%d}
                 """.formatted(courseId))).andExpect(status().isCreated());
     }

@@ -56,7 +56,7 @@ class CourseClassBatchTests {
     ResultActions batch(String days, long id, String start, String finish) throws Exception {
         return mvc.perform(post("/api/courseClass/courseClass/batch").contentType(APPLICATION_JSON)
                 .content("""
-                {"day":%s,"session":"Manhã","start":"%s","finish":"%s","courseId":%d}
+                {"day":%s,"session":"MORNING","start":"%s","finish":"%s","courseId":%d}
                 """.formatted(days, start, finish, id)));
     }
 
@@ -70,6 +70,8 @@ class CourseClassBatchTests {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].day").value("2026-10-03"))
                 .andExpect(jsonPath("$[1].day").value("2026-10-01"))
+                .andExpect(jsonPath("$[0].session").value("MORNING"))
+                .andExpect(jsonPath("$[1].session").value("MORNING"))
                 .andExpect(jsonPath("$[0].statusClass").value("ACTIVE"))
                 .andExpect(jsonPath("$[1].statusClass").value("ACTIVE"))
                 .andExpect(jsonPath("$[0].id").isNumber())
@@ -92,7 +94,7 @@ class CourseClassBatchTests {
     @Test
     void missingDatesReturn400WithoutSaving() throws Exception {
         mvc.perform(post("/api/courseClass/courseClass/batch").contentType(APPLICATION_JSON)
-                .content("{\"courseId\":" + courseId + ",\"session\":\"Manhã\",\"start\":\"08:00\",\"finish\":\"10:00\"}"))
+                .content("{\"courseId\":" + courseId + ",\"session\":\"MORNING\",\"start\":\"08:00\",\"finish\":\"10:00\"}"))
                 .andExpect(status().isBadRequest());
         assertEquals(0, count());
     }
@@ -170,6 +172,18 @@ class CourseClassBatchTests {
                 .andExpect(jsonPath("$.message").value("A aula causa conflito de horários para uma pessoa inscrita."));
         assertEquals(1, count());
         assertEquals(0, jdbc.queryForObject("select count(*) from course_class where course_id = ?", Integer.class, courseId));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"UNKNOWN", "Manhã", "morning", "NIGHTLY", "", "   "})
+    void invalidSessionRejectsEntireBatchAndPreservesExistingClasses(String invalid) throws Exception {
+        batch("[\"2026-10-03\"]", courseId, "08:00", "10:00").andExpect(status().isCreated());
+        var before = jdbc.queryForList("select * from course_class order by id");
+        mvc.perform(post("/api/courseClass/courseClass/batch").contentType(APPLICATION_JSON).content("""
+                {"day":["2026-10-01","2026-10-02"],"session":"%s","start":"08:00","finish":"10:00","courseId":%d}
+                """.formatted(invalid, courseId)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        assertEquals(before, jdbc.queryForList("select * from course_class order by id"));
     }
 
     @Test

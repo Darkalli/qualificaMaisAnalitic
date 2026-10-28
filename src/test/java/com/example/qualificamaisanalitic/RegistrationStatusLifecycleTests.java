@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic;
 
+import com.enums.Period;
 import com.dtos.courseClassesDtos.AddCourseClassDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.dtos.presenceDtos.AddPresenceDto;
@@ -215,7 +216,7 @@ class RegistrationStatusLifecycleTests {
         assertEquals(reactivationFirst ? StatusRegister.ACTIVE : StatusRegister.CANCELED, state(first));
         var saved = classes.findById(lesson.getId()).orElseThrow();
         assertEquals(reactivationFirst ? DAY.plusDays(1) : DAY, saved.getDay());
-        assertEquals(reactivationFirst ? "Session" : "Moved", saved.getSession());
+        assertEquals(reactivationFirst ? Period.MORNING : Period.AFTERNOON, saved.getSession());
         assertEquals(LocalTime.of(9, 0), saved.getStart());
         assertEquals(LocalTime.of(11, 0), saved.getFinish());
         assertEquals(2, registers.count());
@@ -312,11 +313,11 @@ class RegistrationStatusLifecycleTests {
     }
 
     private CourseClass addClass(Course course, LocalDate day, int start, int finish) {
-        return schedule.addCourseClass(new AddCourseClassDto(day, "Session", LocalTime.of(start, 0), LocalTime.of(finish, 0), course.getId()));
+        return schedule.addCourseClass(new AddCourseClassDto(day, Period.MORNING, LocalTime.of(start, 0), LocalTime.of(finish, 0), course.getId()));
     }
 
     private void moveToDay(CourseClass lesson, LocalDate day) {
-        schedule.updateCourseClass(new UpdateCourseClassDto(lesson.getId(), day, "Moved", null, null, null));
+        schedule.updateCourseClass(new UpdateCourseClassDto(lesson.getId(), day, Period.AFTERNOON, null, null, null));
     }
 
     private void importRow(String cpf, Course course) {

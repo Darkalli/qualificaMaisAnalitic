@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic;
 
+import com.enums.Period;
 import com.dtos.courseClassesDtos.AddCourseClassDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.dtos.presenceDtos.AddPresenceDto;
@@ -81,11 +82,11 @@ class ClassScheduleLifecycleTests {
         var changed = add(second, DAY.plusDays(1), 9, 11);
 
         assertThrows(IllegalArgumentException.class, () -> service.updateCourseClass(
-                new UpdateCourseClassDto(changed.getId(), DAY, "Não salvar", null, null, null)));
+                new UpdateCourseClassDto(changed.getId(), DAY, Period.AFTERNOON, null, null, null)));
 
         var saved = classes.findById(changed.getId()).orElseThrow();
         assertEquals(DAY.plusDays(1), saved.getDay());
-        assertEquals("Sessão", saved.getSession());
+        assertEquals(Period.MORNING, saved.getSession());
         service.updateCourseClass(new UpdateCourseClassDto(changed.getId(), DAY, null, LocalTime.of(10, 0), LocalTime.of(12, 0), null));
         assertEquals(DAY, classes.findById(changed.getId()).orElseThrow().getDay());
     }
@@ -98,12 +99,12 @@ class ClassScheduleLifecycleTests {
         LocalTime finish = field.equals("finish") ? LocalTime.of(7, 0) : field.equals("equal") ? LocalTime.of(8, 0) : null;
 
         assertThrows(IllegalArgumentException.class, () -> service.updateCourseClass(
-                new UpdateCourseClassDto(original.getId(), null, "Não salvar", start, finish, null)));
+                new UpdateCourseClassDto(original.getId(), null, Period.AFTERNOON, start, finish, null)));
 
         var saved = classes.findById(original.getId()).orElseThrow();
         assertEquals(LocalTime.of(8, 0), saved.getStart());
         assertEquals(LocalTime.of(10, 0), saved.getFinish());
-        assertEquals("Sessão", saved.getSession());
+        assertEquals(Period.MORNING, saved.getSession());
     }
 
     @ParameterizedTest
@@ -112,7 +113,7 @@ class ClassScheduleLifecycleTests {
         LocalTime start = value.equals("missing") ? null : LocalTime.of(10, 0);
         LocalTime finish = LocalTime.of(value.equals("inverted") ? 8 : 10, 0);
         assertThrows(IllegalArgumentException.class, () -> service.addCourseClass(
-                new AddCourseClassDto(DAY, "Sessão", start, finish, first.getId())));
+                new AddCourseClassDto(DAY, Period.MORNING, start, finish, first.getId())));
         assertEquals(0, classes.count());
     }
 
@@ -183,7 +184,7 @@ class ClassScheduleLifecycleTests {
     }
 
     private CourseClass add(Course course, LocalDate day, int start, int finish) {
-        return service.addCourseClass(new AddCourseClassDto(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course.getId()));
+        return service.addCourseClass(new AddCourseClassDto(day, Period.MORNING, LocalTime.of(start, 0), LocalTime.of(finish, 0), course.getId()));
     }
 
     private void changeStatus(CourseClass courseClass, StatusClass status) {

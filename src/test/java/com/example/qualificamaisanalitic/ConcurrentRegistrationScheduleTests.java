@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic;
 
+import com.enums.Period;
 import com.dtos.registerDtos.AddRegisterDto;
 import com.entities.Course;
 import com.enums.StatusCourse;
@@ -55,7 +56,7 @@ class ConcurrentRegistrationScheduleTests {
         clearDatabase();
         firstCourse = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE));
         secondCourse = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE));
-        classes.saveAndFlush(new CourseClass(DAY, "Manhã", LocalTime.of(8, 0), LocalTime.of(10, 0), firstCourse));
+        classes.saveAndFlush(new CourseClass(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), firstCourse));
     }
 
     @AfterEach
@@ -176,7 +177,7 @@ class ConcurrentRegistrationScheduleTests {
     }
 
     private void addSecondClass(boolean conflict) {
-        classes.saveAndFlush(new CourseClass(DAY, "Manhã", LocalTime.of(conflict ? 9 : 10, 0), LocalTime.of(12, 0), secondCourse));
+        classes.saveAndFlush(new CourseClass(DAY, Period.MORNING, LocalTime.of(conflict ? 9 : 10, 0), LocalTime.of(12, 0), secondCourse));
     }
 
     private int count(String table) {

@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic;
 
+import com.enums.Period;
 import com.dtos.courseClassesDtos.AddCourseClassDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.dtos.presenceDtos.AddPresenceDto;
@@ -204,7 +205,7 @@ class ConcurrentClassAndBatchTests {
     }
 
     private CourseClass add(Course course, LocalDate day, int start, int finish) {
-        return classService.addCourseClass(new AddCourseClassDto(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course.getId()));
+        return classService.addCourseClass(new AddCourseClassDto(day, Period.MORNING, LocalTime.of(start, 0), LocalTime.of(finish, 0), course.getId()));
     }
 
     private int count(String table) { return jdbc.queryForObject("select count(*) from " + table, Integer.class); }

@@ -5,6 +5,7 @@ import com.dtos.courseClassesDtos.AddCourseClassInBatchDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.entities.Course;
 import com.entities.CourseClass;
+import com.enums.Period;
 import com.enums.StatusClass;
 import com.mappers.CourseClassMapper;
 import com.repositories.*;
@@ -53,7 +54,8 @@ public class CourseClassService {
         if (courseClassRepository.existsByCourseAndDay(course, dto.day())) {
             throw new ConflictException("O curso já possui uma aula registrada para este dia.");
         }
-        CourseClass courseClass = new CourseClass(dto.day(), dto.session(), dto.start(), dto.finish(), course, StatusClass.ACTIVE);
+        CourseClass courseClass = new CourseClass(dto.day(), dto.session(), dto.start(), dto.finish(), course,
+                dto.statusClass() != null ? dto.statusClass() : StatusClass.ACTIVE);
         validateRegistrations(courseClass);
         return courseClassRepository.save(courseClass);
     }
@@ -78,7 +80,8 @@ public class CourseClassService {
                 String msg = "O curso já possui uma aula registrada para o dia: " + day;
                 throw new ConflictException(msg);
             }
-            CourseClass courseClass = new CourseClass(day, dto.session(), dto.start(), dto.finish(), course, StatusClass.ACTIVE);
+            CourseClass courseClass = new CourseClass(day, dto.session(), dto.start(), dto.finish(), course,
+                    dto.statusClass() != null ? dto.statusClass() : StatusClass.ACTIVE);
             validateRegistrations(courseClass);
             courseClassRepository.save(courseClass);
             list.add(courseClass);
@@ -93,7 +96,7 @@ public class CourseClassService {
         LocalDate day = dto.day() != null ? dto.day() : courseClass.getDay();
         LocalTime start = dto.start() != null ? dto.start() : courseClass.getStart();
         LocalTime finish = dto.finish() != null ? dto.finish() : courseClass.getFinish();
-        String session = dto.session() != null ? dto.session() : courseClass.getSession();
+        Period session = dto.session() != null ? dto.session() : courseClass.getSession();
         StatusClass status = dto.statusClass() != null ? dto.statusClass() : courseClass.getStatusClass();
         validateTimes(day, session, start, finish);
         if (courseClassRepository.existsByCourseAndDayAndIdNot(course, day, dto.classId())) {
@@ -126,10 +129,13 @@ public class CourseClassService {
         return courseClassRepository.findByCourse(course);
     }
 
-    private void validateTimes(LocalDate day, String session, LocalTime start, LocalTime finish) {
+    public List<CourseClass> allClasses() {
+        return courseClassRepository.findAll();
+    }
+
+    private void validateTimes(LocalDate day, Period session, LocalTime start, LocalTime finish) {
         required(day, "day");
         required(session, "session");
-        maxLength(session, 255, "session");
         required(start, "start");
         required(finish, "finish");
         if (!start.isBefore(finish)) {

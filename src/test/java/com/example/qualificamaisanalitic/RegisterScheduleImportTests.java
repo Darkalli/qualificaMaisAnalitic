@@ -1,5 +1,6 @@
 package com.example.qualificamaisanalitic;
 
+import com.enums.Period;
 import com.dtos.registerDtos.AddRegisterDto;
 import com.entities.Course;
 import com.entities.CourseClass;
@@ -210,7 +211,7 @@ class RegisterScheduleImportTests {
     }
 
     private void addClass(Course course, LocalDate day, int start, int finish) {
-        classes.saveAndFlush(new CourseClass(day, "Sessão", LocalTime.of(start, 0), LocalTime.of(finish, 0), course));
+        classes.saveAndFlush(new CourseClass(day, Period.MORNING, LocalTime.of(start, 0), LocalTime.of(finish, 0), course));
     }
 
     private Register incoming(String cpf, Course course) {
