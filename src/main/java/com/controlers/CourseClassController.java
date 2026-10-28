@@ -47,4 +47,9 @@ public class CourseClassController {
         return ResponseEntity.ok().body(courseClassService.allClassesByCourseId(courseId));
     }
 
+    @GetMapping
+    public ResponseEntity<List<CourseClass>> getAllByCourseId(){
+        return ResponseEntity.ok().body(courseClassService.allClasses());
+    }
+
 }
