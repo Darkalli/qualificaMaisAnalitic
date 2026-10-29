@@ -116,6 +116,13 @@ public class CourseClassService {
     }
 
     @Transactional
+    public CourseClass updateCourseClassStatus(Long id) {
+        CourseClass courseClass = lockClass(id, null);
+        courseClass.setStatusClass(StatusClass.ACTIVE);
+        return courseClassRepository.save(courseClass);
+    }
+
+    @Transactional
     public void deleteCourseClass(Long id) {
         CourseClass courseClass = lockClass(id, null);
         courseClass.setStatusClass(StatusClass.CANCELED);
