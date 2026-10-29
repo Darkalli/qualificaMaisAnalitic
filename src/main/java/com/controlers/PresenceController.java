@@ -1,6 +1,7 @@
 package com.controlers;
 
 import com.dtos.presenceDtos.AddPresenceDto;
+import com.dtos.presenceDtos.DeletePresenceDto;
 import com.dtos.presenceDtos.PresenceByDayAndCourseDto;
 import com.dtos.presenceDtos.PresenceUpdateDto;
 import com.entities.Presence;
@@ -31,14 +32,21 @@ public class PresenceController {
         return ResponseEntity.ok().body(presenceService.updatePresence(updateDto));
     }
 
+    @DeleteMapping
+    public ResponseEntity<Void> deletePresence(@RequestBody DeletePresenceDto dto){
+        presenceService.deletePresence(dto);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/presence/{personId}")
     public ResponseEntity<List<Presence>> getPresenceByPerson(@PathVariable Long personId){
         return ResponseEntity.ok().body(presenceService.getPresenceByPerson(personId));
     }
 
     @GetMapping
-    public ResponseEntity<List<Presence>> getPresenceByDateAndCourse(@RequestBody PresenceByDayAndCourseDto byDayAndCourseDto){
-        return ResponseEntity.ok().body(presenceService.getPresenceByDateAndCourse(byDayAndCourseDto));
+    public ResponseEntity<List<Presence>> getPresenceByDateAndCourse(@RequestParam("courseId") Long courseId, @RequestParam("courseClassId") Long courseClassId){
+        PresenceByDayAndCourseDto dto = new PresenceByDayAndCourseDto(courseId, courseClassId);
+        return ResponseEntity.ok().body(presenceService.getPresenceByDateAndCourse(dto));
     }
 
 }

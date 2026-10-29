@@ -1,6 +1,7 @@
 package com.services;
 
 import com.dtos.presenceDtos.AddPresenceDto;
+import com.dtos.presenceDtos.DeletePresenceDto;
 import com.dtos.presenceDtos.PresenceByDayAndCourseDto;
 import com.dtos.presenceDtos.PresenceUpdateDto;
 import com.entities.*;
@@ -80,6 +81,15 @@ public class PresenceService {
                 .orElseThrow(() -> new EntityNotFoundException("Presença não encontrada"));
         presence.setStatus(update.status());
         return presenceRepository.save(presence);
+    }
+
+    @Transactional
+    public void deletePresence (DeletePresenceDto delete){
+        positiveId(delete.personId(), "personId");
+        positiveId(delete.courseClassId(), "courseClassId");
+        Presence presence = presenceRepository.findByCourseClassIdAndPersonId(delete.courseClassId(), delete.personId())
+                .orElseThrow(() -> new EntityNotFoundException("Presença não encontrada"));
+        presenceRepository.delete(presence);
     }
 
     public List<Presence> getPresenceByPerson(Long id){
