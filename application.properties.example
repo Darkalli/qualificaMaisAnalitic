@@ -31,3 +31,11 @@ app.sheets.catalog-initial-delay-ms=10000
 app.sheets.catalog-dispatch-interval-ms=1000
 app.sheets.connect-timeout-ms=10000
 app.sheets.read-timeout-ms=30000
+
+# PDF reports: replace the example course ID and use the department's approved policy.
+app.reports.organization=Qualifica+
+app.reports.zone=America/Sao_Paulo
+# app.reports.courses[1].signatories[0]=Full name - Coordinator
+# app.reports.courses[1].signatories[1]=Full name - Instructor
+# app.reports.courses[1].minimum-attendance-percentage=75
+# app.reports.courses[1].minimum-attended-hours=0

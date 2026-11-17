@@ -10,6 +10,8 @@ import java.util.Optional;
 
 public interface PresenceRepository extends JpaRepository<Presence, Long> {
 
+    List<Presence> findByCourseClass_Course_Id(Long courseId);
+
     List<Presence> findByPersonId(Long personId);
 
     List<Presence> findByCourseClassIdAndCourseId(Long courseClassId, Long courseId);

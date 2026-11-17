@@ -11,6 +11,10 @@ import java.util.Optional;
 
 public interface RegisterRepository extends JpaRepository<Register, Long> {
 
+    List<Register> findByCourseOfInterest_IdOrderByPerson_FullNameAsc(Long courseId);
+
+    List<Register> findByPerson_IdOrderByRegisterDateDesc(Long personId);
+
     Optional<Register> findByPerson_CpfAndCourseOfInterest_Id(String cpf, Long courseId);
 
     List<Register> findByPerson_Cpf(String cpf);

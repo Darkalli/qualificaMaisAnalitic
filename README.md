@@ -94,6 +94,10 @@ app.sheets.check-initial-delay=10s
 
 Os [formatos das colunas e opções de coleta](docs/guia-tecnico.md#cabeçalho-da-planilha) estão no guia técnico. Configurações privadas, credenciais e `tokens/` são ignorados pelo Git.
 
+## PDF reports
+
+Eight PDF reports are available under `/api/reports`, restricted to `ADMIN` and `AGENT`. See the [report routes, course settings and completion rules](docs/pdf-reports.md). Configure signatories and approved completion thresholds before issuing documents that require them.
+
 ## Testes
 
 ```powershell

@@ -12,6 +12,7 @@ import org.springframework.dao.IncorrectResultSizeDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -27,6 +28,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
     public ResponseEntity<Object> handleAuthentication(org.springframework.security.core.AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).header("WWW-Authenticate", "Bearer")
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(new ApiErrorDto(401, "Usuário, senha ou token inválidos. Entre novamente."));
     }
 
@@ -108,10 +110,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         if (status.is5xxServerError()) {
             log.error("Falha ao processar requisição da API", ex);
         }
-        return super.handleExceptionInternal(ex, new ApiErrorDto(status.value(), message), headers, status, request);
+        HttpHeaders errorHeaders = new HttpHeaders();
+        errorHeaders.putAll(headers);
+        errorHeaders.setContentType(MediaType.APPLICATION_JSON);
+        return super.handleExceptionInternal(ex, new ApiErrorDto(status.value(), message), errorHeaders, status, request);
     }
 
     private ResponseEntity<Object> response(HttpStatus status, String message) {
-        return ResponseEntity.status(status).body(new ApiErrorDto(status.value(), message));
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON)
+                .body(new ApiErrorDto(status.value(), message));
     }
 }
