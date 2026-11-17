@@ -90,7 +90,10 @@ class ApiControllerTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));
         mvc.perform(get("/api/course")).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
         mvc.perform(delete("/api/course/course/{id}", id)).andExpect(status().isNoContent());
-        mvc.perform(get("/api/course")).andExpect(status().isOk()).andExpect(content().json("[]"));
+        mvc.perform(get("/api/course")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(id))
+                .andExpect(jsonPath("$[0].statusCourse").value("CANCELED"));
     }
 
     @Test
@@ -144,15 +147,15 @@ class ApiControllerTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("JUSTIFIED"));
         mvc.perform(get("/api/presence/presence/{personId}", personId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
-        mvc.perform(get("/api/presence").contentType(APPLICATION_JSON)
-                        .content("{\"courseId\":" + courseId + ",\"courseClassId\":" + classId + "}"))
+        mvc.perform(get("/api/presence").param("courseId", Long.toString(courseId))
+                        .param("courseClassId", Long.toString(classId)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].status").value("PRESENT"));
-        mvc.perform(get("/api/presence").contentType(APPLICATION_JSON)
-                        .content("{\"courseId\":" + otherCourseId + ",\"courseClassId\":" + otherClassId + "}"))
+        mvc.perform(get("/api/presence").param("courseId", Long.toString(otherCourseId))
+                        .param("courseClassId", Long.toString(otherClassId)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].status").value("JUSTIFIED"));
-        mvc.perform(get("/api/presence").contentType(APPLICATION_JSON)
-                        .content("{\"courseId\":" + courseId + ",\"courseClassId\":" + otherClassId + "}"))
+        mvc.perform(get("/api/presence").param("courseId", Long.toString(courseId))
+                        .param("courseClassId", Long.toString(otherClassId)))
                 .andExpect(status().isOk()).andExpect(content().json("[]"));
     }
 
@@ -225,8 +228,9 @@ class ApiControllerTests {
         mvc.perform(put("/api/course").contentType(APPLICATION_JSON).content("{}"))
                 .andExpect(status().isMethodNotAllowed()).andExpect(jsonPath("$.status").value(405))
                 .andExpect(header().string("Allow", org.hamcrest.Matchers.containsString("POST")));
-        // O contrato atual exige JSON no GET; query parameters ainda não substituem o corpo.
-        mvc.perform(get("/api/presence").param("courseId", "1").param("courseClassId", "2"))
+        mvc.perform(get("/api/presence").param("courseId", "1"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/presence").param("courseClassId", "2"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -411,11 +415,7 @@ class ApiControllerTests {
 
     @Test
     void registrationWritesRequireJsonBodiesAndRejectInvalidDatesAndCourseIds() throws Exception {
-        mvc.perform(get("/api/register").param("personCpf", "01234567890").param("courseOfInterestId", "1"))
-                .andExpect(status().isMethodNotAllowed());
         mvc.perform(delete("/api/register")).andExpect(status().isBadRequest());
-        mvc.perform(get("/api/register").contentType(APPLICATION_JSON).content("{invalid"))
-                .andExpect(status().isMethodNotAllowed());
         mvc.perform(delete("/api/register").contentType(APPLICATION_JSON).content("{invalid"))
                 .andExpect(status().isBadRequest());
         for (String payload : new String[]{
@@ -450,7 +450,7 @@ class ApiControllerTests {
     }
 
     @Test
-    void queryAndDeletionRequireTheirBodyFields() throws Exception {
+    void presenceQueriesAndRegistrationDeletionRequireTheirIdentifiers() throws Exception {
         for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[]{
                 get("/api/presence"), delete("/api/register")}) {
             mvc.perform(request.contentType(APPLICATION_JSON).content("{}"))
@@ -491,7 +491,7 @@ class ApiControllerTests {
     }
 
     @Test
-    void duplicateCpfAndReferencedCourseReturnConflictWithoutExposingDatabaseDetails() throws Exception {
+    void duplicateCpfReturnsConflictAndCourseCancellationPreservesRegistrations() throws Exception {
         createPerson("01234567890", "Pessoa Exemplo");
         mvc.perform(post("/api/person").contentType(APPLICATION_JSON)
                         .content(personBody("01234567890", "Pessoa Duplicada")))
@@ -499,11 +499,15 @@ class ApiControllerTests {
                         {"status":409,"message":"Já existe um registro com os dados informados."}
                         """));
         long courseId = id(createCourse("Curso A"));
-        createRegistration("01234567890", courseId);
+        long registerId = id(createRegistration("01234567890", courseId));
         mvc.perform(delete("/api/course/course/{id}", courseId))
-                .andExpect(status().isConflict()).andExpect(content().json("""
-                        {"status":409,"message":"A operação conflita com os vínculos entre os registros."}
-                        """));
+                .andExpect(status().isNoContent()).andExpect(content().string(""));
+        mvc.perform(registrationSearch("01234567890", courseId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(registerId))
+                .andExpect(jsonPath("$.courseOfInterest.id").value(courseId))
+                .andExpect(jsonPath("$.courseOfInterest.statusCourse").value("CANCELED"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
         assertEquals(1, jdbc.queryForObject("select count(*) from course", Integer.class));
         assertEquals(1, jdbc.queryForObject("select count(*) from person", Integer.class));
         assertEquals(1, jdbc.queryForObject("select count(*) from register", Integer.class));
