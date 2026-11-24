@@ -35,7 +35,8 @@ public class CourseService {
         maxLength(courseDto.name(), 255, "name");
         maxLength(courseDto.description(), 255, "description");
         dateRange(courseDto.start(), courseDto.finish());
-        Course course = new Course(courseDto.name(), courseDto.description(), courseDto.start(), courseDto.finish(), StatusCourse.ACTIVE);
+        positiveInt(courseDto.maximumStudents(), "maximumStudents");
+        Course course = new Course(courseDto.name(), courseDto.description(), courseDto.start(), courseDto.finish(), StatusCourse.ACTIVE, courseDto.maximumStudents());
         course.setPeriod(courseDto.period());
         Course saved = courseRepository.save(course);
         events.publishEvent(new CourseCatalogChanged());
@@ -51,6 +52,7 @@ public class CourseService {
             maxLength(courseDto.name(), 255, "name");
         }
         maxLength(courseDto.description(), 255, "description");
+        positiveInt(courseDto.maximumStudents(), "maximumStudents");
         dateRange(courseDto.start() != null ? courseDto.start() : course.getStart(),
                 courseDto.finish() != null ? courseDto.finish() : course.getFinish());
         mapper.updateCoursefromDto(courseDto, course);

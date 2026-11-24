@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "register", uniqueConstraints = @UniqueConstraint(name = "uk_register_person_course",
@@ -24,12 +24,12 @@ public class Register {
     @JoinColumn(name = "course_id", nullable = false)
     private Course courseOfInterest;
     @Column(nullable = false)
-    private LocalDate registerDate;
+    private LocalDateTime registerDate;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private StatusRegister status = StatusRegister.ACTIVE;
 
-    public Register(Person person, Course courseOfInterest, LocalDate registerDate, StatusRegister status) {
+    public Register(Person person, Course courseOfInterest, LocalDateTime registerDate, StatusRegister status) {
         this.person = person;
         this.courseOfInterest = courseOfInterest;
         this.registerDate = registerDate;

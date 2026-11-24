@@ -20,6 +20,12 @@ public final class ValidationUtils {
         }
     }
 
+    public static void positiveInt(Integer value, String field) {
+        if (value != null && value <= 0) {
+            throw new IllegalArgumentException("O campo '" + field + "' deve ser um inteiro positivo.");
+        }
+    }
+
     public static void maxLength(String value, int max, String field) {
         if (value != null && value.length() > max) {
             throw new IllegalArgumentException("O campo '" + field + "' deve ter no máximo " + max + " caracteres.");

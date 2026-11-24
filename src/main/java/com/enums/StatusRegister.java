@@ -2,7 +2,7 @@ package com.enums;
 
 public enum StatusRegister {
 
-    ACTIVE(0, "Ativa"), CANCELED(1,"Cancelada");
+    ACTIVE(0, "Ativa"), CANCELED(1,"Cancelada"), WAITLISTED(2, "Reserva");
     private Integer code;
     private String description;
 
