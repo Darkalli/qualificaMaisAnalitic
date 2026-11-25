@@ -42,7 +42,7 @@ public class RegisterService {
         validateKey(dto.personCpf(), dto.courseOfInterestId());
         String cpf = formatCpf(dto.personCpf());
         cpf = cleanCpf(cpf);
-        Course course = courseRepository.findByIdForRegistration(dto.courseOfInterestId())
+        Course course = courseRepository.findByIdForUpdate(dto.courseOfInterestId())
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado com o Id: " + dto.courseOfInterestId()));
         Person person = personRepository.findByCpfForUpdate(cpf)
                 .orElseThrow(() -> new EntityNotFoundException("Pessoa não encontrada"));
@@ -50,7 +50,7 @@ public class RegisterService {
         if (hasScheduleConflict(registerRepository, newRegister)) {
             throw new ConflictException("A pessoa já está inscrita em um curso com horário conflitante.");
         } else {
-            if (courseStudentsCounter(course, newRegister.getId())) {
+            if (isCourseFull(course)) {
                 newRegister.setStatus(StatusRegister.WAITLISTED);
             }
             return registerRepository.save(newRegister);
@@ -69,7 +69,7 @@ public class RegisterService {
         if (hasScheduleConflict(registerRepository, register)) {
             throw new ConflictException("Não é possível reativar: existe inscrição em outro curso com horário conflitante.");
         }
-        if (courseStudentsCounter(course, register.getId())) {
+        if (isCourseFull(course)) {
             register.setStatus(StatusRegister.WAITLISTED);
         } else {
             register.setStatus(StatusRegister.ACTIVE);
@@ -86,11 +86,14 @@ public class RegisterService {
         if (register.getStatus() == StatusRegister.CANCELED) {
             return;
         }
-        List<Long> max = course.getMaximumStudents();
-        max.remove(register.getId());
-        courseStudentsCounter(course, course.getWaitList().getFirst());
+        boolean occupiedPlace = register.getStatus() == StatusRegister.ACTIVE;
         register.setStatus(StatusRegister.CANCELED);
         registerRepository.save(register);
+        if (occupiedPlace && !isCourseFull(course)) {
+            registerRepository.findFirstByCourseOfInterestIdAndStatusOrderByRegisterDate(
+                    course.getId(), StatusRegister.WAITLISTED)
+                    .ifPresent(waitlisted -> waitlisted.setStatus(StatusRegister.ACTIVE));
+        }
     }
 
     public List<Register> getAllRegisters() {
@@ -116,10 +119,10 @@ public class RegisterService {
         required(dto, "inscrição");
         validateKey(dto.personCpf(), dto.courseOfInterestId());
         String cpf = cleanCpf(formatCpf(dto.personCpf()));
-        Course course = courseRepository.findByIdForRegistration(dto.courseOfInterestId())
-                .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados."));
+        Course course = courseRepository.findByIdForUpdate (dto.courseOfInterestId())
+                .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para o curso informado."));
         Person person = personRepository.findByCpfForUpdate(cpf)
-                .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados."));
+                .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa informada."));
         return registerRepository.findByPerson_CpfAndCourseOfInterest_Id(person.getCpf(), course.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Inscrição não encontrada para a pessoa e o curso informados."));
     }
@@ -129,16 +132,9 @@ public class RegisterService {
         positiveId(courseId, "courseOfInterestId");
     }
 
-    private boolean courseStudentsCounter(Course course, Long id) {
-        List<Long> max = course.getMaximumStudents();
-        int maxCount = course.getMaximumStudentsCount();
-        if (maxCount > max.size()) {
-            max.add(id);
-            course.setMaximumStudents(max);
-            courseRepository.save(course);
-            return false;
-        }
-        course.getWaitList().add(id);
-        return true;
+    private boolean isCourseFull(Course course) {
+        int counted = registerRepository.countAllActiveByCourseId(course.getId());
+        int max = course.getMaximumStudentsCount();
+        return max <= counted;
     }
 }

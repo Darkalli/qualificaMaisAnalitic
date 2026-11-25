@@ -1,6 +1,7 @@
 package com.example.qualificamaisanalitic.controllers;
 
 import com.jayway.jsonpath.JsonPath;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -248,7 +249,10 @@ class ApiControllerTests {
                 .andExpect(jsonPath("$.courseOfInterest.id").value(courseId))
                 .andExpect(jsonPath("$.courseOfInterest.courseClass[0].id").value(classId))
                 .andExpect(jsonPath("$.courseOfInterest.courseClass[0].course.courseClass").doesNotExist())
-                .andExpect(jsonPath("$.registerDate").value("2026-10-01")));
+                .andExpect(result -> {
+                    String timestamp = JsonPath.read(result.getResponse().getContentAsString(), "$.registerDate");
+                    assertDoesNotThrow(() -> LocalDateTime.parse(timestamp));
+                }));
         long otherRegisterId = id(createRegistration("01234567890abc", otherId));
 
         mvc.perform(get("/api/register/register/{cpf}", "012.345.678-90"))
@@ -346,16 +350,19 @@ class ApiControllerTests {
         createPerson("01234567890", "Pessoa Exemplo");
         long courseId = id(createCourse("Curso A"));
         long registerId = id(createRegistration("01234567890", courseId));
+        LocalDateTime originalDate = jdbc.queryForObject(
+                "select register_date from register where id=?", LocalDateTime.class, registerId);
 
         mvc.perform(post("/api/register")
-                .contentType(APPLICATION_JSON).content("""
-                        {"personCpf":"012.345.678-90","courseOfInterestId":%d,"registerDate":"2026-10-02"}
-                        """.formatted(courseId)))
+                .contentType(APPLICATION_JSON).content(registrationBody("012.345.678-90", courseId)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.message").value("Já existe um registro com os dados informados."));
         mvc.perform(registrationSearch("01234567890", courseId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(registerId))
-                .andExpect(jsonPath("$.registerDate").value("2026-10-01"));
+                .andExpect(result -> {
+                    String timestamp = JsonPath.read(result.getResponse().getContentAsString(), "$.registerDate");
+                    assertEquals(originalDate, LocalDateTime.parse(timestamp));
+                });
         assertEquals(1, jdbc.queryForObject("select count(*) from register", Integer.class));
         assertEquals(1, jdbc.queryForObject("select count(*) from person", Integer.class));
     }
@@ -378,14 +385,13 @@ class ApiControllerTests {
         createPerson("01234567890", "Pessoa Exemplo");
         long courseId = id(createCourse("Curso A"));
         createRegistration("01234567890", courseId);
-        for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[]{
-                registrationSearch("012.345.678-90", Long.MAX_VALUE),
-                delete("/api/register").contentType(APPLICATION_JSON)
-                        .content(registrationKey("012.345.678-90", Long.MAX_VALUE))}) {
-            mvc.perform(request)
-                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404))
-                    .andExpect(jsonPath("$.message").value("Inscrição não encontrada para a pessoa e o curso informados."));
-        }
+        mvc.perform(registrationSearch("012.345.678-90", Long.MAX_VALUE))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Inscrição não encontrada para a pessoa e o curso informados."));
+        mvc.perform(delete("/api/register").contentType(APPLICATION_JSON)
+                        .content(registrationKey("012.345.678-90", Long.MAX_VALUE)))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Inscrição não encontrada para o curso informado."));
         assertEquals(1, jdbc.queryForObject("select count(*) from register", Integer.class));
     }
 
@@ -414,13 +420,13 @@ class ApiControllerTests {
     }
 
     @Test
-    void registrationWritesRequireJsonBodiesAndRejectInvalidDatesAndCourseIds() throws Exception {
+    void registrationWritesRequireJsonBodiesAndRejectInvalidCpfsAndCourseIds() throws Exception {
         mvc.perform(delete("/api/register")).andExpect(status().isBadRequest());
         mvc.perform(delete("/api/register").contentType(APPLICATION_JSON).content("{invalid"))
                 .andExpect(status().isBadRequest());
         for (String payload : new String[]{
-                "{\"personCpf\":\"01234567890\",\"courseOfInterestId\":\"abc\",\"registerDate\":\"2026-10-01\"}",
-                "{\"personCpf\":\"01234567890\",\"courseOfInterestId\":1,\"registerDate\":\"invalid\"}"}) {
+                "{\"personCpf\":\"01234567890\",\"courseOfInterestId\":\"abc\"}",
+                "{\"personCpf\":\"\",\"courseOfInterestId\":1}"}) {
             mvc.perform(post("/api/register").contentType(APPLICATION_JSON).content(payload))
                     .andExpect(status().isBadRequest());
         }
@@ -650,7 +656,7 @@ class ApiControllerTests {
 
     private String registrationBody(String cpf, long courseId) {
         return """
-                {"personCpf":"%s","courseOfInterestId":%d,"registerDate":"2026-10-01"}
+                {"personCpf":"%s","courseOfInterestId":%d}
                 """.formatted(cpf, courseId);
     }
 
@@ -674,7 +680,7 @@ class ApiControllerTests {
     @ParameterizedTest
     @ValueSource(strings = {"name", "description"})
     void courseTextLimitsApplyToCreationAndPatchWithoutPartialChanges(String field) throws Exception {
-        String body = "{\"name\":\"Curso\",\"description\":\"Descrição\"}";
+        String body = "{\"name\":\"Curso\",\"description\":\"Descrição\",\"maximumStudents\":20}";
         String accepted = JsonPath.parse(body).set("$." + field, "a".repeat(255)).jsonString();
         long courseId = id(mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content(accepted))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$." + field).value("a".repeat(255))));
@@ -697,7 +703,8 @@ class ApiControllerTests {
     @ParameterizedTest
     @ValueSource(strings = {"null", "\"\"", "\"   \""})
     void courseRequiresNonblankNameOnCreation(String name) throws Exception {
-        mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("{\"name\":" + name + "}"))
+        mvc.perform(post("/api/course").contentType(APPLICATION_JSON)
+                        .content("{\"name\":" + name + ",\"maximumStudents\":20}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("O campo 'name' é obrigatório."));
         assertEquals(0, jdbc.queryForObject("select count(*) from course", Integer.class));
@@ -707,7 +714,8 @@ class ApiControllerTests {
     void courseDatesAreOptionalAndEqualDatesAreAccepted() throws Exception {
         for (String dates : new String[]{"", ",\"start\":\"2026-10-01\"", ",\"finish\":\"2026-10-01\"",
                 ",\"start\":\"2026-10-01\",\"finish\":\"2026-10-01\""}) {
-            mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("{\"name\":\"Curso\"" + dates + "}"))
+            mvc.perform(post("/api/course").contentType(APPLICATION_JSON)
+                            .content("{\"name\":\"Curso\",\"maximumStudents\":20" + dates + "}"))
                     .andExpect(status().isCreated());
         }
         assertEquals(4, jdbc.queryForObject("select count(*) from course", Integer.class));
@@ -716,7 +724,7 @@ class ApiControllerTests {
     @Test
     void reversedDatesAreRejectedOnCreationAndAgainstOmittedPatchDates() throws Exception {
         mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("""
-                {"name":"Inválido","start":"2026-11-01","finish":"2026-10-01"}
+                {"name":"Inválido","start":"2026-11-01","finish":"2026-10-01","maximumStudents":20}
                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("O campo 'finish' não pode ser anterior ao campo 'start'."));
@@ -921,7 +929,7 @@ class ApiControllerTests {
 
     private ResultActions createCourse(String name) throws Exception {
         return mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("""
-                {"name":"%s","description":"Introdução","start":"2026-10-01","finish":"2026-11-01"}
+                {"name":"%s","description":"Introdução","start":"2026-10-01","finish":"2026-11-01","maximumStudents":20}
                 """.formatted(name))).andExpect(status().isCreated());
     }
 

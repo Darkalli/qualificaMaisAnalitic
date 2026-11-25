@@ -64,6 +64,9 @@ public class PresenceService {
         if (register.getStatus() == StatusRegister.CANCELED) {
             throw new ConflictException("A pessoa possui inscrição cancelada no curso desta aula.");
         }
+        if (register.getStatus() != StatusRegister.ACTIVE) {
+            throw new ConflictException("A pessoa está na lista de reserva do curso desta aula.");
+        }
 
         if (presenceRepository.existsByPersonAndCourseClass(person, courseClass)) {
             throw new ConflictException("O Aluno(a) já possui uma presença registrada para esta aula.");

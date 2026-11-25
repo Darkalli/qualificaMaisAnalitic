@@ -50,8 +50,8 @@ class RegisterScheduleImportTests {
     @BeforeEach
     void prepareCatalog() {
         clearDatabase();
-        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusMonths(1),StatusCourse.ACTIVE));
-        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE));
+        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusMonths(1),StatusCourse.ACTIVE, 20));
+        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE, 20));
         addClass(first, DAY, 8, 10);
     }
 
@@ -187,12 +187,12 @@ class RegisterScheduleImportTests {
         addClass(second, DAY, 9, 11);
         if (directFirst) {
             people.saveAndFlush(PersonTestData.person(CPF));
-            directRegistration.addRegister(new AddRegisterDto("012.345.678-90", first.getId(), DAY));
+            directRegistration.addRegister(new AddRegisterDto("012.345.678-90", first.getId()));
             assertThrows(IllegalArgumentException.class, () -> persistence.persist(collection(incoming(CPF, second))));
         } else {
             persistence.persist(collection(incoming(CPF, first)));
             assertThrows(IllegalArgumentException.class,
-                    () -> directRegistration.addRegister(new AddRegisterDto("012.345.678-90", second.getId(), DAY)));
+                    () -> directRegistration.addRegister(new AddRegisterDto("012.345.678-90", second.getId())));
         }
         assertCounts(1, 1);
         assertTrue(registrations.findByPerson_CpfAndCourseOfInterest_Id(CPF, second.getId()).isEmpty());

@@ -54,8 +54,8 @@ class ConcurrentRegistrationScheduleTests {
     @BeforeEach
     void prepareCatalog() {
         clearDatabase();
-        firstCourse = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE));
-        secondCourse = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE));
+        firstCourse = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE, 20));
+        secondCourse = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE, 20));
         classes.saveAndFlush(new CourseClass(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), firstCourse));
     }
 
@@ -170,7 +170,7 @@ class ConcurrentRegistrationScheduleTests {
 
     private void register(String flow, String cpf, Course course) {
         if (flow.equals("api")) {
-            direct.addRegister(new AddRegisterDto(cpf, course.getId(), DAY));
+            direct.addRegister(new AddRegisterDto(cpf, course.getId()));
         } else {
             imported.persist(new SheetImportResult(List.of(RegisterTestData.register(cpf, course.getId())), List.of(), 0));
         }

@@ -47,7 +47,7 @@ class CoursePeriodControllerTests {
     @Test
     void updatesOnlyThePeriodWithoutChangingOtherFields() throws Exception {
         var course = new Course("Informática", "Introdução", LocalDate.of(2026, 10, 1),
-                LocalDate.of(2026, 11, 1), StatusCourse.ACTIVE);
+                LocalDate.of(2026, 11, 1), StatusCourse.ACTIVE, 20);
         course.setId(3L);
         course.setPeriod(Period.MORNING);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
@@ -65,7 +65,7 @@ class CoursePeriodControllerTests {
     @Test
     void preservesPeriodWhenItIsOmittedOrNullInPartialUpdate() throws Exception {
         var course = new Course("Informática", null, LocalDate.of(2026, 10, 1),
-                LocalDate.of(2026, 11, 1), StatusCourse.ACTIVE);
+                LocalDate.of(2026, 11, 1), StatusCourse.ACTIVE, 20);
         course.setPeriod(Period.MORNING);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
         for (String request : new String[]{"{\"courseId\":3,\"name\":\"Novo\"}",
@@ -80,7 +80,7 @@ class CoursePeriodControllerTests {
     @Test
     void acceptsLegacyCreationWithoutPeriod() throws Exception {
         mvc.perform(post("/api/course").contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"Curso sem período\"}"))
+                        .content("{\"name\":\"Curso sem período\",\"maximumStudents\":20}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.period").doesNotExist());
     }
@@ -111,7 +111,7 @@ class CoursePeriodControllerTests {
     void createsCourseWithTheSelectedPeriod(Period period) throws Exception {
         mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("""
                 {"name":"Informática", "description":"Introdução", "start":"2026-10-01",
-                 "finish":"2026-11-01", "period":"%s"}
+                "finish":"2026-11-01", "period":"%s", "maximumStudents":20}
                 """.formatted(period.name())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Informática"))

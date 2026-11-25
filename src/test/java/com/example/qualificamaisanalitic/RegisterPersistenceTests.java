@@ -50,8 +50,8 @@ class RegisterPersistenceTests {
         jdbc.update("delete from person");
         jdbc.update("delete from address");
         jdbc.update("delete from course");
-        firstCourseId = courses.saveAndFlush(new Course("Informática", "Descrição original", null, null, StatusCourse.ACTIVE)).getId();
-        secondCourseId = courses.saveAndFlush(new Course("Inglês", null, null, null, StatusCourse.ACTIVE)).getId();
+        firstCourseId = courses.saveAndFlush(new Course("Informática", "Descrição original", null, null, StatusCourse.ACTIVE, 20)).getId();
+        secondCourseId = courses.saveAndFlush(new Course("Inglês", null, null, null, StatusCourse.ACTIVE, 20)).getId();
     }
 
     @Test

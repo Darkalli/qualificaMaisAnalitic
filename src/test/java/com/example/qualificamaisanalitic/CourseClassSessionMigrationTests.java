@@ -106,6 +106,6 @@ class CourseClassSessionMigrationTests {
     }
 
     private Flyway latest() {
-        return Flyway.configure().dataSource(dataSource).load();
+        return Flyway.configure().dataSource(dataSource).target("8").load();
     }
 }

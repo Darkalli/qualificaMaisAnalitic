@@ -131,7 +131,7 @@ class CourseClassDailyRuleTests {
     }
 
     private Course course(String name) {
-        return courses.addCourse(new AddCourseDto(name, null, DAY, DAY.plusMonths(1)));
+        return courses.addCourse(new AddCourseDto(name, null, DAY, DAY.plusMonths(1), 20));
     }
 
     private CourseClass addClass(Course course, LocalDate day) {

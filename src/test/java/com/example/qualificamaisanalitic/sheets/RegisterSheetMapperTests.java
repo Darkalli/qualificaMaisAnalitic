@@ -8,6 +8,7 @@ import com.sheets.RegisterSheetMapper;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -57,7 +58,7 @@ class RegisterSheetMapperTests {
         assertEquals(Set.of(Disabilities.NONE), register.getPerson().getDisabilities());
         assertEquals(42L, register.getCourseOfInterest().getId());
         assertNull(register.getCourseOfInterest().getName());
-        assertEquals(LocalDate.of(2026, 9, 24), register.getRegisterDate());
+        assertEquals(LocalDateTime.of(2026, 9, 24, 13, 45, 10), register.getRegisterDate());
     }
 
     @Test
@@ -119,11 +120,11 @@ class RegisterSheetMapperTests {
         var register = result.registers().getFirst();
         assertEquals("Rua Exemplo", register.getPerson().getAddress().getStreet());
         assertEquals(WorkState.ONLY_STUDYING, register.getPerson().getWorkState());
-        assertEquals(LocalDate.of(2026, 9, 1), register.getRegisterDate());
+        assertEquals(LocalDate.of(2026, 9, 1).atStartOfDay(), register.getRegisterDate());
 
         Collections.reverse(header);
         Collections.reverse(row);
-        assertEquals(LocalDate.of(2026, 9, 1),
+        assertEquals(LocalDate.of(2026, 9, 1).atStartOfDay(),
                 mapper.map(List.of(header, row), 1).registers().getFirst().getRegisterDate());
     }
 
@@ -200,12 +201,35 @@ class RegisterSheetMapperTests {
 
     @Test
     void acceptsBrazilianAndIsoDates() {
-        for (String date : List.of("24/09/2026", "2026-09-24", "2026-09-24T13:45:10")) {
+        for (String date : List.of("24/09/2026", "2026-09-24")) {
             var row = row();
             row.set(12, date);
-            assertEquals(LocalDate.of(2026, 9, 24),
+            assertEquals(LocalDate.of(2026, 9, 24).atStartOfDay(),
                     mapper.map(List.of(header(), row), 1).registers().getFirst().getRegisterDate());
         }
+    }
+
+    @Test
+    void preservesBrazilianAndIsoTimestampInsteadOfDiscardingTime() {
+        for (String timestamp : List.of("24/09/2026 13:45:10", "2026-09-24T13:45:10")) {
+            var row = row();
+            row.set(12, timestamp);
+            var result = mapper.map(List.of(header(), row), 1);
+            assertTrue(result.errors().isEmpty(), timestamp);
+            assertEquals(LocalDateTime.of(2026, 9, 24, 13, 45, 10),
+                    result.registers().getFirst().getRegisterDate());
+        }
+    }
+
+    @Test
+    void preservesFractionalSecondsInIsoTimestamp() {
+        var row = row();
+        row.set(12, "2026-09-24T13:45:10.123456");
+        var result = mapper.map(List.of(header(), row), 1);
+
+        assertTrue(result.errors().isEmpty());
+        assertEquals(LocalDateTime.of(2026, 9, 24, 13, 45, 10, 123456000),
+                result.registers().getFirst().getRegisterDate());
     }
 
     @Test

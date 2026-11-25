@@ -59,8 +59,8 @@ class ConcurrentClassAndBatchTests {
     @BeforeEach
     void prepare() {
         clearDatabase();
-        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
-        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
+        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE, 20));
+        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE, 20));
     }
 
     @AfterEach
@@ -124,7 +124,7 @@ class ConcurrentClassAndBatchTests {
     void classChangesAndRegistrationCannotCommitConflictingSchedules(String change, boolean registrationFirst) throws Exception {
         people.saveAndFlush(PersonTestData.person(CPF));
         add(first, DAY, 8, 10);
-        registrations.addRegister(new AddRegisterDto(CPF, first.getId(), DAY));
+        registrations.addRegister(new AddRegisterDto(CPF, first.getId()));
         CourseClass candidate;
         if (change.equals("create")) {
             candidate = null;
@@ -136,7 +136,7 @@ class ConcurrentClassAndBatchTests {
             if (change.equals("create")) add(second, DAY, 9, 11);
             else classService.updateCourseClass(new UpdateCourseClassDto(candidate.getId(), DAY, null, null, null, null, StatusClass.ACTIVE));
         };
-        Runnable register = () -> registrations.addRegister(new AddRegisterDto(CPF, second.getId(), DAY));
+        Runnable register = () -> registrations.addRegister(new AddRegisterDto(CPF, second.getId()));
 
         Throwable rejected = overlap(registrationFirst ? register : changeClass, registrationFirst ? changeClass : register);
 
@@ -154,7 +154,7 @@ class ConcurrentClassAndBatchTests {
     void cancelingAndRecordingAttendancePreserveAConsistentHistory(boolean attendanceFirst) throws Exception {
         Long personId = people.saveAndFlush(PersonTestData.person(CPF)).getId();
         var courseClass = add(first, DAY, 8, 10);
-        registrations.addRegister(new AddRegisterDto(CPF, first.getId(), DAY));
+        registrations.addRegister(new AddRegisterDto(CPF, first.getId()));
         Runnable record = () -> attendance.addPresence(new AddPresenceDto(personId, courseClass.getId(), PresenceStatus.PRESENT));
         Runnable cancel = () -> classService.deleteCourseClass(courseClass.getId());
 

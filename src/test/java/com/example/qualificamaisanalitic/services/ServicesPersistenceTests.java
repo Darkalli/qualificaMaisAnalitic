@@ -52,13 +52,13 @@ class ServicesPersistenceTests {
 
     @Test
     void createsUpdatesQueriesAndDeletesCourseAndClassThroughServices() {
-        courses.addCourse(new AddCourseDto("Curso de teste", "Descrição", DAY, DAY.plusMonths(1)));
+        courses.addCourse(new AddCourseDto("Curso de teste", "Descrição", DAY, DAY.plusMonths(1), 20));
         var course = courses.getCourseByName("Curso de teste");
         classes.addCourseClass(new AddCourseClassDto(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
         entityManager.flush();
         entityManager.clear();
         var courseClass = classes.allClassesByCourseId(course.getId()).getFirst();
-        courses.updateCourse(new UpdateCourseDto(course.getId(), "Curso atualizado", null, null, null));
+        courses.updateCourse(new UpdateCourseDto(course.getId(), "Curso atualizado", null, null, null, null));
         classes.updateCourseClass(new UpdateCourseClassDto(courseClass.getId(), null, Period.AFTERNOON,
                 LocalTime.of(14, 0), LocalTime.of(16, 0), null));
         entityManager.flush();
@@ -122,12 +122,12 @@ class ServicesPersistenceTests {
         String cpf = "76543210900";
         people.addPerson(ServiceTestData.addPerson(cpf, "11999990000", null));
         var personId = people.getByCpf(cpf).getId();
-        var firstCourse = new Course("Informática", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
-        var secondCourse = new Course("Inglês", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
+        var firstCourse = new Course("Informática", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE, 20);
+        var secondCourse = new Course("Inglês", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE, 20);
         entityManager.persist(firstCourse);
         entityManager.persist(secondCourse);
-        registers.addRegister(new AddRegisterDto(cpf, firstCourse.getId(), DAY));
-        registers.addRegister(new AddRegisterDto(cpf, secondCourse.getId(), DAY));
+        registers.addRegister(new AddRegisterDto(cpf, firstCourse.getId()));
+        registers.addRegister(new AddRegisterDto(cpf, secondCourse.getId()));
         entityManager.flush();
         entityManager.clear();
         var saved = registers.getAllRegisterByCpf(cpf);
@@ -136,14 +136,14 @@ class ServicesPersistenceTests {
         assertEquals(1L, entityManager.createQuery("select count(p) from Person p where p.cpf = :cpf", Long.class)
                 .setParameter("cpf", cpf).getSingleResult());
         assertThrows(DataIntegrityViolationException.class,
-                () -> registers.addRegister(new AddRegisterDto(cpf, firstCourse.getId(), DAY.plusDays(1))));
+                () -> registers.addRegister(new AddRegisterDto(cpf, firstCourse.getId())));
     }
 
     @Test
     void attendanceServicesPersistAndUpdateOnlySelectedCourse() {
         var person = PersonTestData.person("65432109800");
-        var firstCourse = new Course("Curso A", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
-        var secondCourse = new Course("Curso B", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
+        var firstCourse = new Course("Curso A", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE, 20);
+        var secondCourse = new Course("Curso B", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE, 20);
         entityManager.persist(person);
         entityManager.persist(firstCourse);
         entityManager.persist(secondCourse);
@@ -151,8 +151,8 @@ class ServicesPersistenceTests {
         var secondClass = new CourseClass(DAY, Period.AFTERNOON, LocalTime.of(14, 0), LocalTime.of(16, 0), secondCourse);
         entityManager.persist(firstClass);
         entityManager.persist(secondClass);
-        registers.addRegister(new AddRegisterDto(person.getCpf(), firstCourse.getId(), DAY));
-        registers.addRegister(new AddRegisterDto(person.getCpf(), secondCourse.getId(), DAY));
+        registers.addRegister(new AddRegisterDto(person.getCpf(), firstCourse.getId()));
+        registers.addRegister(new AddRegisterDto(person.getCpf(), secondCourse.getId()));
         presences.addPresence(new AddPresenceDto(person.getId(), firstClass.getId(), PresenceStatus.PRESENT));
         presences.addPresence(new AddPresenceDto(person.getId(), secondClass.getId(), PresenceStatus.ABSENT));
         entityManager.flush();

@@ -67,11 +67,11 @@ class PdfControllerTests {
     void setUp() {
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         course = courses.save(new Course("Informática básica", "Curso de teste", LocalDate.of(2026, 11, 1),
-                LocalDate.of(2026, 11, 10), StatusCourse.ACTIVE));
+                LocalDate.of(2026, 11, 10), StatusCourse.ACTIVE, 20));
         person = PersonTestData.person("98765432109");
         person.setFullName("João da Conceição");
         person = people.save(person);
-        register = registers.save(new Register(person, course, LocalDate.of(2026, 11, 1), StatusRegister.ACTIVE));
+        register = registers.save(new Register(person, course, LocalDate.of(2026, 11, 1).atStartOfDay(), StatusRegister.ACTIVE));
         lessons = new ArrayList<>();
         for (int day = 2; day <= 5; day++) lessons.add(lesson(day, StatusClass.ACTIVE));
         mark(0, PresenceStatus.PRESENT);
@@ -144,7 +144,7 @@ class PdfControllerTests {
     void shouldApplyInclusiveDateFiltersAndExcludeClassesBeforeRegistration() throws Exception {
         String text = reportText(route("attendance") + "&start=2026-11-02&finish=2026-11-02");
         assertTrue(text.contains("100,00%"), text);
-        register.setRegisterDate(LocalDate.of(2026, 11, 3));
+        register.setRegisterDate(LocalDate.of(2026, 11, 3).atStartOfDay());
         registers.saveAndFlush(register);
         text = reportText(route("attendance"));
         assertTrue(text.contains("0,00%"), text);
@@ -316,7 +316,7 @@ class PdfControllerTests {
     @Test
     void shouldAssessTheWholeCourseForLateEnrollmentCertification() throws Exception {
         completeAttendance();
-        register.setRegisterDate(LocalDate.of(2026, 11, 5));
+        register.setRegisterDate(LocalDate.of(2026, 11, 5).atStartOfDay());
         registers.saveAndFlush(register);
         presences.deleteAll();
         presences.flush();

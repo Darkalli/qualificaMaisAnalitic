@@ -58,7 +58,7 @@ public class PdfService {
                     + "contam como presença. Sem lançamento = pendente; a frequência inclui pendências no total.");
             List<List<String>> rows = new ArrayList<>();
             for (Register register : registers.findByCourseOfInterest_IdOrderByPerson_FullNameAsc(courseId)) {
-                AttendanceSummary summary = summarize(data, register.getPerson().getId(), register.getRegisterDate());
+                AttendanceSummary summary = summarize(data, register.getPerson().getId(), register.getRegisterDate().toLocalDate());
                 rows.add(List.of(name(register.getPerson()), register.getStatus().getDescription(),
                         "" + summary.present(), "" + summary.absent(), "" + summary.justified(),
                         "" + summary.pending(), number(summary.percentage()) + "%"));
@@ -169,7 +169,7 @@ public class PdfService {
                 if (start != null && course.getFinish() != null && course.getFinish().isBefore(start)
                         || finish != null && course.getStart() != null && course.getStart().isAfter(finish)) continue;
                 AttendanceSummary summary = summarize(attendanceData(course, start, finish, now),
-                        personId, register.getRegisterDate());
+                        personId, register.getRegisterDate().toLocalDate());
                 rows.add(List.of(course.getName(), range(course.getStart(), course.getFinish()),
                         course.getStatusCourse().getDescription() + " / " + register.getStatus().getDescription(),
                         summary.present() + "/" + summary.totalClasses(), "" + summary.pending(),
@@ -187,9 +187,9 @@ public class PdfService {
         Course course = register.getCourseOfInterest();
         LocalDateTime now = now();
         AttendanceData data = attendanceData(course, start, finish, now);
-        AttendanceSummary summary = summarize(data, register.getPerson().getId(), register.getRegisterDate());
+        AttendanceSummary summary = summarize(data, register.getPerson().getId(), register.getRegisterDate().toLocalDate());
         List<CourseClass> attended = data.classes().stream()
-                .filter(lesson -> !lesson.getDay().isBefore(register.getRegisterDate()))
+                .filter(lesson -> !lesson.getDay().isBefore(register.getRegisterDate().toLocalDate()))
                 .filter(lesson -> data.status(register.getPerson().getId(), lesson.getId()) == PresenceStatus.PRESENT).toList();
         if (attended.isEmpty()) throw new ConflictException("No confirmed participation in the requested period.");
         try (PdfDocument pdf = document("Declaração de participação", now)) {
@@ -342,6 +342,7 @@ public class PdfService {
                 : person.getSocialName() + " (" + person.getFullName() + ")";
     }
     private String date(LocalDate date) { return date == null ? "Não informado" : date.format(DATE); }
+    private String date(LocalDateTime dateTime) { return date(dateTime == null ? null : dateTime.toLocalDate()); }
     private String range(LocalDate start, LocalDate finish) {
         return (start == null ? "Início não limitado" : date(start)) + " a "
                 + (finish == null ? "Fim não limitado" : date(finish));

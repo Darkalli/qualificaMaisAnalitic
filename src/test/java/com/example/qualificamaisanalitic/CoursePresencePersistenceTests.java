@@ -31,8 +31,8 @@ class CoursePresencePersistenceTests {
         var day = LocalDate.of(2026, 9, 29);
         var person = PersonTestData.person("98765432100");
         entityManager.persist(person);
-        var course = new Course("Informática", "Curso de exemplo", day, day.plusMonths(1), StatusCourse.ACTIVE);
-        var otherCourse = new Course("Inglês", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
+        var course = new Course("Informática", "Curso de exemplo", day, day.plusMonths(1), StatusCourse.ACTIVE, 20);
+        var otherCourse = new Course("Inglês", null, day, day.plusMonths(1), StatusCourse.ACTIVE, 20);
         entityManager.persist(course);
         entityManager.persist(otherCourse);
         var courseClass = new CourseClass(day, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
@@ -84,7 +84,7 @@ class CoursePresencePersistenceTests {
     void databaseRejectsDuplicateAttendanceForPersonAndClass() {
         var day = LocalDate.of(2026, 9, 29);
         var person = PersonTestData.person("98765432100");
-        var course = new Course("Informática", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
+        var course = new Course("Informática", null, day, day.plusMonths(1), StatusCourse.ACTIVE, 20);
         entityManager.persist(person);
         entityManager.persist(course);
         var courseClass = new CourseClass(day, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);

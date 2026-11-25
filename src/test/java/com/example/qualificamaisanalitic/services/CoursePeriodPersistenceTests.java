@@ -33,7 +33,7 @@ class CoursePeriodPersistenceTests {
     @EnumSource(Period.class)
     void storesTheSelectedPeriodAsTextAndReloadsIt(Period period) {
         var created = courses.addCourse(new AddCourseDto("Curso " + period.name(), null,
-                DAY, DAY.plusMonths(1), period));
+                DAY, DAY.plusMonths(1), period, 20));
         Long id = created.getId();
         entityManager.flush();
         entityManager.clear();
@@ -49,14 +49,14 @@ class CoursePeriodPersistenceTests {
     @Test
     void updatesPeriodAndPreservesItWhenAnotherFieldIsChanged() {
         var created = courses.addCourse(new AddCourseDto("Curso de teste", "Descrição", DAY,
-                DAY.plusMonths(1), Period.MORNING));
+                DAY.plusMonths(1), Period.MORNING, 20));
         Long id = created.getId();
-        courses.updateCourse(new UpdateCourseDto(id, null, null, null, null, Period.NIGHT));
+        courses.updateCourse(new UpdateCourseDto(id, null, null, null, null, Period.NIGHT, null));
         entityManager.flush();
         entityManager.clear();
         assertEquals(Period.NIGHT, entityManager.find(Course.class, id).getPeriod());
 
-        courses.updateCourse(new UpdateCourseDto(id, "Curso atualizado", null, null, null));
+        courses.updateCourse(new UpdateCourseDto(id, "Curso atualizado", null, null, null, null));
         entityManager.flush();
         entityManager.clear();
         var saved = entityManager.find(Course.class, id);
@@ -68,7 +68,7 @@ class CoursePeriodPersistenceTests {
 
     @Test
     void preservesCompatibilityWithRequestsWithoutPeriod() {
-        var created = courses.addCourse(new AddCourseDto("Curso sem período", null, DAY, DAY));
+        var created = courses.addCourse(new AddCourseDto("Curso sem período", null, DAY, DAY, 20));
         Long id = created.getId();
         entityManager.flush();
         entityManager.clear();

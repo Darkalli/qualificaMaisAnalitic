@@ -56,7 +56,7 @@ class PresenceServiceTests {
         when(people.findByIdForUpdate(7L)).thenReturn(Optional.of(person));
         when(classes.findById(3L)).thenReturn(Optional.of(courseClass));
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(person.getCpf(), course.getId()))
-                .thenReturn(Optional.of(new Register(person, course, DAY, StatusRegister.ACTIVE)));
+                .thenReturn(Optional.of(new Register(person, course, DAY.atStartOfDay(), StatusRegister.ACTIVE)));
         service.addPresence(new AddPresenceDto(7L, 3L, PresenceStatus.PRESENT));
         var capture = ArgumentCaptor.forClass(Presence.class);
         verify(presences).save(capture.capture());
@@ -77,7 +77,7 @@ class PresenceServiceTests {
         when(people.findByIdForUpdate(7L)).thenReturn(Optional.of(person));
         when(classes.findById(3L)).thenReturn(Optional.of(courseClass));
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(person.getCpf(), courseClass.getCourse().getId()))
-                .thenReturn(Optional.of(new Register(person, courseClass.getCourse(), DAY, StatusRegister.ACTIVE)));
+                .thenReturn(Optional.of(new Register(person, courseClass.getCourse(), DAY.atStartOfDay(), StatusRegister.ACTIVE)));
         when(presences.existsByPersonAndCourseClass(person, courseClass)).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class,
@@ -156,7 +156,7 @@ class PresenceServiceTests {
         var person = ServiceTestData.person();
         var course = new Course();
         var courseClass = courseClass(course);
-        var registration = new Register(person, course, DAY, StatusRegister.CANCELED);
+        var registration = new Register(person, course, DAY.atStartOfDay(), StatusRegister.CANCELED);
         when(people.findByIdForUpdate(7L)).thenReturn(Optional.of(person));
         when(classes.findById(3L)).thenReturn(Optional.of(courseClass));
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(person.getCpf(), course.getId()))

@@ -155,7 +155,7 @@ public class RegisterSheetMapper {
         }
         // A consulta ao catálogo ocorre na persistência; collect()/Quickstart não acessam o banco.
         register.setCourseOfInterest(course);
-        register.setRegisterDate(date(cell(row, columns, Column.REGISTER_DATE)));
+        register.setRegisterDate(dateTime(cell(row, columns, Column.REGISTER_DATE)));
         return register;
     }
 
@@ -222,17 +222,17 @@ public class RegisterSheetMapper {
         };
     }
 
-    private LocalDate date(String value) {
+    private LocalDateTime dateTime(String value) {
         for (DateTimeFormatter formatter : List.of(BR_DATE, DateTimeFormatter.ISO_LOCAL_DATE)) {
             try {
-                return LocalDate.parse(value, formatter);
+                return LocalDate.parse(value, formatter).atStartOfDay();
             } catch (DateTimeParseException ignored) {
                 // Tenta os formatos de data/hora usados pelo formulário.
             }
         }
         for (DateTimeFormatter formatter : List.of(BR_TIMESTAMP, DateTimeFormatter.ISO_LOCAL_DATE_TIME)) {
             try {
-                return LocalDateTime.parse(value, formatter).toLocalDate();
+                return LocalDateTime.parse(value, formatter);
             } catch (DateTimeParseException ignored) {
                 // Tenta o próximo formato sem aceitar datas inválidas.
             }

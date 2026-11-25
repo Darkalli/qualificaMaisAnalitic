@@ -44,7 +44,7 @@ class ConcurrentPersistenceTests {
     void databaseAllowsOnlyOneConcurrentInsertForTheSamePersonAndTarget(String table) throws Exception {
         var day = LocalDate.of(2026, 10, 1);
         var person = PersonTestData.person("10987654321");
-        var course = new Course("Curso de concorrência", null, day, day.plusDays(1), StatusCourse.ACTIVE);
+        var course = new Course("Curso de concorrência", null, day, day.plusDays(1), StatusCourse.ACTIVE, 20);
         var courseClass = new CourseClass(day, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         transactions.executeWithoutResult(status -> {
             people.saveAndFlush(person);
@@ -63,7 +63,7 @@ class ConcurrentPersistenceTests {
                                 + " where " + filter + " = ?", Integer.class, targetId));
                         awaitBothWriters(readyToWrite);
                         if (table.equals("register")) {
-                            registers.saveAndFlush(new Register(person, course, day, StatusRegister.ACTIVE));
+                            registers.saveAndFlush(new Register(person, course, day.atStartOfDay(), StatusRegister.ACTIVE));
                         } else if (table.equals("presence")) {
                             presences.saveAndFlush(new Presence(person, courseClass, course, PresenceStatus.PRESENT));
                         } else {

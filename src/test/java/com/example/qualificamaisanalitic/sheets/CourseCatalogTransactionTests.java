@@ -47,8 +47,8 @@ class CourseCatalogTransactionTests {
             var sync = context.getBean(CourseCatalogSync.class); var service = context.getBean(CourseService.class);
             var tx = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
             tx.executeWithoutResult(status -> {
-                service.addCourse(new AddCourseDto("Java",null,LocalDate.of(2026,1,1),LocalDate.of(2026,1,1)));
-                service.updateCourse(new UpdateCourseDto(1L,"Updated",null,null,null));
+                service.addCourse(new AddCourseDto("Java",null,LocalDate.of(2026,1,1),LocalDate.of(2026,1,1), 20));
+                service.updateCourse(new UpdateCourseDto(1L,"Updated",null,null,null, null));
                 service.deleteCourse(1L);
                 sync.flushRequested(); verifyNoInteractions(writer);
             });
@@ -57,7 +57,7 @@ class CourseCatalogTransactionTests {
             verify(writer,times(1)).replace(List.of());
             reset(writer);
             tx.executeWithoutResult(status -> {
-                service.addCourse(new AddCourseDto("Rolled back",null,null,null));
+                service.addCourse(new AddCourseDto("Rolled back",null,null,null, 20));
                 status.setRollbackOnly();
             });
             sync.flushRequested(); verifyNoInteractions(writer);

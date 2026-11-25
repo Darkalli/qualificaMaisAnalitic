@@ -63,8 +63,8 @@ class RegistrationStatusLifecycleTests {
     @BeforeEach
     void prepare() {
         clearDatabase();
-        first = courses.saveAndFlush(new Course("A", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
-        second = courses.saveAndFlush(new Course("B", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
+        first = courses.saveAndFlush(new Course("A", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE, 20));
+        second = courses.saveAndFlush(new Course("B", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE, 20));
         personId = people.saveAndFlush(PersonTestData.person(CPF)).getId();
     }
 
@@ -84,7 +84,7 @@ class RegistrationStatusLifecycleTests {
         cancel(first);
         var saved = registers.findById(enrolled.getId()).orElseThrow();
         assertEquals(StatusRegister.CANCELED, saved.getStatus());
-        assertEquals(DAY, saved.getRegisterDate());
+        assertEquals(enrolled.getRegisterDate(), saved.getRegisterDate());
         assertEquals(1, registers.count());
         assertEquals(PresenceStatus.PRESENT, presences.findById(presence.getId()).orElseThrow().getStatus());
         var nextLesson = addClass(first, DAY.plusDays(1), 8, 10);
@@ -102,7 +102,7 @@ class RegistrationStatusLifecycleTests {
         assertEquals(1, registers.count());
         var saved = registers.findById(enrolled.getId()).orElseThrow();
         assertEquals(StatusRegister.CANCELED, saved.getStatus());
-        assertEquals(DAY, saved.getRegisterDate());
+        assertEquals(enrolled.getRegisterDate(), saved.getRegisterDate());
         assertEquals(1, people.count());
     }
 
@@ -150,7 +150,7 @@ class RegistrationStatusLifecycleTests {
         enroll(second);
         assertThrows(ConflictException.class, () -> reactivate(first));
         assertEquals(StatusRegister.CANCELED, state(first));
-        assertEquals(DAY, registers.findById(original.getId()).orElseThrow().getRegisterDate());
+        assertEquals(original.getRegisterDate(), registers.findById(original.getId()).orElseThrow().getRegisterDate());
         assertEquals(2, registers.count());
         assertEquals(PresenceStatus.PRESENT, presences.findById(presence.getId()).orElseThrow().getStatus());
     }
@@ -164,7 +164,7 @@ class RegistrationStatusLifecycleTests {
         assertEquals(StatusRegister.ACTIVE, state(first));
         assertEquals(1, registers.count());
         assertEquals(original.getId(), registration.getByPersonCpfAndCourseOfInterest(CPF, first.getId()).getId());
-        assertEquals(DAY, registers.findById(original.getId()).orElseThrow().getRegisterDate());
+        assertEquals(original.getRegisterDate(), registers.findById(original.getId()).orElseThrow().getRegisterDate());
     }
 
     @ParameterizedTest
@@ -292,7 +292,8 @@ class RegistrationStatusLifecycleTests {
     }
 
     private Register enroll(Course course) {
-        return registration.addRegister(new AddRegisterDto(CPF, course.getId(), DAY));
+        Register created = registration.addRegister(new AddRegisterDto(CPF, course.getId()));
+        return registers.findById(created.getId()).orElseThrow();
     }
 
     private void cancel(Course course) {

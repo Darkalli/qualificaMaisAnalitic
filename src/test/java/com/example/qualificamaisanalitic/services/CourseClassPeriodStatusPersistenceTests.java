@@ -89,6 +89,6 @@ class CourseClassPeriodStatusPersistenceTests {
     }
 
     private Long newCourse() {
-        return courses.addCourse(new AddCourseDto("Curso de teste", null, DAY, DAY.plusMonths(1))).getId();
+        return courses.addCourse(new AddCourseDto("Curso de teste", null, DAY, DAY.plusMonths(1), 20)).getId();
     }
 }

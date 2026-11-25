@@ -51,8 +51,8 @@ class ClassScheduleLifecycleTests {
     @BeforeEach
     void prepare() {
         clearDatabase();
-        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
-        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE));
+        first = courses.saveAndFlush(new Course("Curso A", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE, 20));
+        second = courses.saveAndFlush(new Course("Curso B", null, DAY, DAY.plusDays(10), StatusCourse.ACTIVE, 20));
         personId = people.saveAndFlush(PersonTestData.person(CPF)).getId();
     }
 
@@ -121,7 +121,7 @@ class ClassScheduleLifecycleTests {
     @ValueSource(strings = {"CANCELED", "POSTPONED"})
     void inactiveClassesPreserveAttendanceAndDoNotBlockOtherCourses(String state) {
         var original = add(first, DAY, 8, 10);
-        registration.addRegister(new AddRegisterDto(CPF, first.getId(), DAY));
+        registration.addRegister(new AddRegisterDto(CPF, first.getId()));
         var presence = attendance.addPresence(new AddPresenceDto(personId, original.getId(), PresenceStatus.PRESENT));
         if (state.equals("CANCELED")) {
             service.deleteCourseClass(original.getId());
@@ -133,11 +133,11 @@ class ClassScheduleLifecycleTests {
         assertEquals(StatusClass.valueOf(state), saved.getStatusClass());
         assertEquals(PresenceStatus.PRESENT, presences.findById(presence.getId()).orElseThrow().getStatus());
         Long anotherPerson = people.saveAndFlush(PersonTestData.person("98765432100")).getId();
-        registration.addRegister(new AddRegisterDto("98765432100", first.getId(), DAY));
+        registration.addRegister(new AddRegisterDto("98765432100", first.getId()));
         assertThrows(IllegalArgumentException.class, () -> attendance.addPresence(
                 new AddPresenceDto(anotherPerson, original.getId(), PresenceStatus.PRESENT)));
         add(second, DAY, 9, 11);
-        registration.addRegister(new AddRegisterDto(CPF, second.getId(), DAY));
+        registration.addRegister(new AddRegisterDto(CPF, second.getId()));
         assertThrows(IllegalArgumentException.class, () -> changeStatus(original, StatusClass.ACTIVE));
         assertEquals(StatusClass.valueOf(state), classes.findById(original.getId()).orElseThrow().getStatusClass());
         assertEquals(1, presences.count());
@@ -149,7 +149,7 @@ class ClassScheduleLifecycleTests {
     @ValueSource(strings = {"day", "course", "start", "finish"})
     void attendanceProtectsOriginalClassIdentityAndSchedule(String field) {
         var original = add(first, DAY, 8, 10);
-        registration.addRegister(new AddRegisterDto(CPF, first.getId(), DAY));
+        registration.addRegister(new AddRegisterDto(CPF, first.getId()));
         attendance.addPresence(new AddPresenceDto(personId, original.getId(), PresenceStatus.PRESENT));
 
         assertThrows(IllegalArgumentException.class, () -> service.updateCourseClass(new UpdateCourseClassDto(
@@ -179,8 +179,8 @@ class ClassScheduleLifecycleTests {
     }
 
     private void registerBoth() {
-        registration.addRegister(new AddRegisterDto(CPF, first.getId(), DAY));
-        registration.addRegister(new AddRegisterDto(CPF, second.getId(), DAY));
+        registration.addRegister(new AddRegisterDto(CPF, first.getId()));
+        registration.addRegister(new AddRegisterDto(CPF, second.getId()));
     }
 
     private CourseClass add(Course course, LocalDate day, int start, int finish) {

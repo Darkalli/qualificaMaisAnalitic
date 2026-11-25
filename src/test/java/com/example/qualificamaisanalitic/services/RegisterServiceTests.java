@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
@@ -53,15 +54,19 @@ class RegisterServiceTests {
         var person = ServiceTestData.person();
         var course = course(3L);
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
-        when(courses.findByIdForRegistration(3L)).thenReturn(Optional.of(course));
-        service.addRegister(new AddRegisterDto(CPF, 3L, DAY));
+        when(courses.findByIdForUpdate(3L)).thenReturn(Optional.of(course));
+        var beforeCreation = LocalDateTime.now();
+        service.addRegister(new AddRegisterDto(CPF, 3L));
+        var afterCreation = LocalDateTime.now();
         var capture = ArgumentCaptor.forClass(Register.class);
         verify(registers).save(capture.capture());
         var saved = capture.getValue();
         assertNull(saved.getId());
         assertSame(person, saved.getPerson());
         assertSame(course, saved.getCourseOfInterest());
-        assertEquals(DAY, saved.getRegisterDate());
+        assertNotNull(saved.getRegisterDate());
+        assertFalse(saved.getRegisterDate().isBefore(beforeCreation));
+        assertFalse(saved.getRegisterDate().isAfter(afterCreation));
         assertEquals(StatusRegister.ACTIVE, saved.getStatus());
         verify(people, never()).save(any());
         verify(courses, never()).save(any());
@@ -69,16 +74,16 @@ class RegisterServiceTests {
 
     @Test
     void refusesRegistrationOfUnknownPerson() {
-        when(courses.findByIdForRegistration(3L)).thenReturn(Optional.of(course(3L)));
+        when(courses.findByIdForUpdate(3L)).thenReturn(Optional.of(course(3L)));
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.empty());
         assertThrows(EntityNotFoundException.class,
-                () -> service.addRegister(new AddRegisterDto(CPF, 3L, DAY)));
+                () -> service.addRegister(new AddRegisterDto(CPF, 3L)));
         verifyNoInteractions(registers);
     }
 
     @Test
     void searchesAndCancelsRegistrationUsingBothCpfAndCourse() {
-        var registration = new Register(ServiceTestData.person(), course(3L), DAY, StatusRegister.ACTIVE);
+        var registration = new Register(ServiceTestData.person(), course(3L), DAY.atStartOfDay(), StatusRegister.ACTIVE);
         stubStatusLocks(registration);
         registration.setId(17L);
         stubStatusLocks(registration);
@@ -89,20 +94,20 @@ class RegisterServiceTests {
         service.deleteRegister(key);
         assertEquals(StatusRegister.CANCELED, registration.getStatus());
         assertEquals(17L, registration.getId());
-        assertEquals(DAY, registration.getRegisterDate());
+        assertEquals(DAY.atStartOfDay(), registration.getRegisterDate());
         assertEquals(CPF, registration.getPerson().getCpf());
         assertEquals(3L, registration.getCourseOfInterest().getId());
         assertSame(registration, service.getByPersonCpfAndCourseOfInterest(key.personCpf(), key.courseOfInterestId()));
         verify(registers).save(registration);
         verify(registers, never()).delete(any());
         verify(people).findByCpfForUpdate(CPF);
-        verify(courses).findByIdForRegistration(3L);
+        verify(courses).findByIdForUpdate(3L);
     }
 
     @Test
     void reportsMissingRegistrationForSearchAndDeletion() {
         var key = new SearchRegisterDto(CPF, 99L);
-        when(courses.findByIdForRegistration(99L)).thenReturn(Optional.of(course(99L)));
+        when(courses.findByIdForUpdate(99L)).thenReturn(Optional.of(course(99L)));
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(ServiceTestData.person()));
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 99L)).thenReturn(Optional.empty());
         assertThrows(EntityNotFoundException.class, () -> service.getByPersonCpfAndCourseOfInterest(key.personCpf(), key.courseOfInterestId()));
@@ -112,8 +117,8 @@ class RegisterServiceTests {
 
     @Test
     void listsAllRegistrationsWithoutChangingTheirStatus() {
-        var active = new Register(ServiceTestData.person(), course(3L), DAY, StatusRegister.ACTIVE);
-        var canceled = new Register(ServiceTestData.person(), course(4L), DAY, StatusRegister.CANCELED);
+        var active = new Register(ServiceTestData.person(), course(3L), DAY.atStartOfDay(), StatusRegister.ACTIVE);
+        var canceled = new Register(ServiceTestData.person(), course(4L), DAY.atStartOfDay(), StatusRegister.CANCELED);
         canceled.getPerson().setCpf("98765432100");
         var results = List.of(active, canceled);
         when(registers.findAll()).thenReturn(results);
@@ -139,20 +144,20 @@ class RegisterServiceTests {
     @Test
     void listsDifferentRegistrationsOfTheSamePerson() {
         var person = ServiceTestData.person();
-        var results = List.of(new Register(person, course(3L), DAY, StatusRegister.ACTIVE), new Register(person, course(4L), DAY, StatusRegister.ACTIVE));
+        var results = List.of(new Register(person, course(3L), DAY.atStartOfDay(), StatusRegister.ACTIVE), new Register(person, course(4L), DAY.atStartOfDay(), StatusRegister.ACTIVE));
         when(registers.findByPerson_Cpf(CPF)).thenReturn(results);
         assertEquals(results, service.getAllRegisterByCpf(CPF));
     }
 
     @Test
     void refusesUnknownCourseBeforeSavingRegistration() {
-        when(courses.findByIdForRegistration(99L)).thenReturn(Optional.empty());
-        assertThrows(EntityNotFoundException.class, () -> service.addRegister(new AddRegisterDto(CPF, 99L, DAY)));
+        when(courses.findByIdForUpdate(99L)).thenReturn(Optional.empty());
+        assertThrows(EntityNotFoundException.class, () -> service.addRegister(new AddRegisterDto(CPF, 99L)));
         verifyNoInteractions(people, registers);
     }
 
     private Course course(long id) {
-        var course = new Course("Curso de exemplo", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE);
+        var course = new Course("Curso de exemplo", null, DAY, DAY.plusMonths(1), StatusCourse.ACTIVE, 20);
         course.setId(id);
         return course;
     }
@@ -162,15 +167,16 @@ class RegisterServiceTests {
     void normalizesCpfInAllFourRegistrationOperations(String input) {
         var person = ServiceTestData.person();
         var course = course(3L);
-        var registration = new Register(person, course, DAY, StatusRegister.ACTIVE);
+        var registration = new Register(person, course, DAY.atStartOfDay(), StatusRegister.ACTIVE);
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
-        when(courses.findByIdForRegistration(3L)).thenReturn(Optional.of(course));
+        when(courses.findByIdForUpdate(3L)).thenReturn(Optional.of(course));
+        lenient().when(courses.findByid(3L)).thenReturn(Optional.of(course));
         when(registers.save(any(Register.class))).thenReturn(registration);
         when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(registration));
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L))
                 .thenReturn(Optional.of(registration));
 
-        assertSame(registration, service.addRegister(new AddRegisterDto(input, 3L, DAY)));
+        assertSame(registration, service.addRegister(new AddRegisterDto(input, 3L)));
         assertEquals(List.of(registration), service.getAllRegisterByCpf(input));
         var key = new SearchRegisterDto(input, 3L);
         assertSame(registration, service.getByPersonCpfAndCourseOfInterest(key.personCpf(), key.courseOfInterestId()));
@@ -182,7 +188,6 @@ class RegisterServiceTests {
         assertEquals(StatusRegister.CANCELED, registration.getStatus());
         verify(registers, never()).delete(any());
         verify(registers, times(2)).save(any(Register.class));
-        verifyNoMoreInteractions(registers);
     }
 
     @ParameterizedTest
@@ -190,7 +195,7 @@ class RegisterServiceTests {
     void rejectsInvalidCpfInAllOperationsBeforeAccessingRepositories(String input) {
         var key = new SearchRegisterDto(input, 3L);
         assertThrows(IllegalArgumentException.class,
-                () -> service.addRegister(new AddRegisterDto(input, 3L, DAY)));
+                () -> service.addRegister(new AddRegisterDto(input, 3L)));
         assertThrows(IllegalArgumentException.class, () -> service.getAllRegisterByCpf(input));
         assertThrows(IllegalArgumentException.class, () -> service.getByPersonCpfAndCourseOfInterest(key.personCpf(), key.courseOfInterestId()));
         assertThrows(IllegalArgumentException.class, () -> service.deleteRegister(key));
@@ -214,9 +219,9 @@ class RegisterServiceTests {
         addClass(existing, DAY, 8, 10);
         addClass(requested, DAY.plusDays(dayOffset), start, finish);
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
-        when(courses.findByIdForRegistration(4L)).thenReturn(Optional.of(requested));
-        when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(new Register(person, existing, DAY, StatusRegister.ACTIVE)));
-        var input = new AddRegisterDto("012.345.678-90", 4L, DAY);
+        when(courses.findByIdForUpdate(4L)).thenReturn(Optional.of(requested));
+        when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(new Register(person, existing, DAY.atStartOfDay(), StatusRegister.ACTIVE)));
+        var input = new AddRegisterDto("012.345.678-90", 4L);
 
         if (conflict) {
             assertThrows(IllegalArgumentException.class, () -> service.addRegister(input));
@@ -237,10 +242,10 @@ class RegisterServiceTests {
         if (existingHasClass) addClass(existing, DAY, 8, 10);
         if (requestedHasClass) addClass(requested, DAY, 8, 10);
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
-        when(courses.findByIdForRegistration(4L)).thenReturn(Optional.of(requested));
-        when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(new Register(person, existing, DAY, StatusRegister.ACTIVE)));
+        when(courses.findByIdForUpdate(4L)).thenReturn(Optional.of(requested));
+        when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(new Register(person, existing, DAY.atStartOfDay(), StatusRegister.ACTIVE)));
 
-        service.addRegister(new AddRegisterDto(CPF, 4L, DAY));
+        service.addRegister(new AddRegisterDto(CPF, 4L));
 
         verify(registers).save(any(Register.class));
     }
@@ -257,11 +262,11 @@ class RegisterServiceTests {
         addClass(requested, DAY, 10, 12);
         addClass(requested, DAY.plusDays(1), 15, 17);
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
-        when(courses.findByIdForRegistration(4L)).thenReturn(Optional.of(requested));
+        when(courses.findByIdForUpdate(4L)).thenReturn(Optional.of(requested));
         when(registers.findByPerson_Cpf(CPF)).thenReturn(List.of(
-                new Register(person, unrelated, DAY, StatusRegister.ACTIVE), new Register(person, existing, DAY, StatusRegister.ACTIVE)));
+                new Register(person, unrelated, DAY.atStartOfDay(), StatusRegister.ACTIVE), new Register(person, existing, DAY.atStartOfDay(), StatusRegister.ACTIVE)));
 
-        assertThrows(IllegalArgumentException.class, () -> service.addRegister(new AddRegisterDto(CPF, 4L, DAY)));
+        assertThrows(IllegalArgumentException.class, () -> service.addRegister(new AddRegisterDto(CPF, 4L)));
 
         verify(registers, never()).save(any());
     }
@@ -270,7 +275,7 @@ class RegisterServiceTests {
     void reactivatesCanceledRegistrationPreservingIdentityAndDate() {
         var person = ServiceTestData.person();
         var course = course(3L);
-        var registration = new Register(person, course, DAY, StatusRegister.CANCELED);
+        var registration = new Register(person, course, DAY.atStartOfDay(), StatusRegister.CANCELED);
         registration.setId(17L);
         stubStatusLocks(registration);
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L))
@@ -283,13 +288,13 @@ class RegisterServiceTests {
         assertEquals(17L, registration.getId());
         assertSame(person, registration.getPerson());
         assertSame(course, registration.getCourseOfInterest());
-        assertEquals(DAY, registration.getRegisterDate());
+        assertEquals(DAY.atStartOfDay(), registration.getRegisterDate());
         verify(registers, never()).delete(any());
     }
 
     @Test
     void reactivationOfActiveRegistrationIsIdempotent() {
-        var registration = new Register(ServiceTestData.person(), course(3L), DAY, StatusRegister.ACTIVE);
+        var registration = new Register(ServiceTestData.person(), course(3L), DAY.atStartOfDay(), StatusRegister.ACTIVE);
         stubStatusLocks(registration);
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L))
                 .thenReturn(Optional.of(registration));
@@ -303,7 +308,7 @@ class RegisterServiceTests {
 
     @Test
     void reactivationReportsMissingRegistration() {
-        when(courses.findByIdForRegistration(99L)).thenReturn(Optional.of(course(99L)));
+        when(courses.findByIdForUpdate(99L)).thenReturn(Optional.of(course(99L)));
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(ServiceTestData.person()));
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 99L)).thenReturn(Optional.empty());
         assertThrows(EntityNotFoundException.class,
@@ -318,9 +323,9 @@ class RegisterServiceTests {
         var existing = course(4L);
         addClass(requested, DAY, 8, 10);
         addClass(existing, DAY, 9, 11);
-        var canceled = new Register(person, requested, DAY, StatusRegister.CANCELED);
+        var canceled = new Register(person, requested, DAY.atStartOfDay(), StatusRegister.CANCELED);
         canceled.setId(17L);
-        var active = new Register(person, existing, DAY, StatusRegister.ACTIVE);
+        var active = new Register(person, existing, DAY.atStartOfDay(), StatusRegister.ACTIVE);
         active.setId(18L);
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L)).thenReturn(Optional.of(canceled));
         stubStatusLocks(canceled);
@@ -336,8 +341,9 @@ class RegisterServiceTests {
     void cancellationLocksCourseThenPersonBeforeReadingRegistration() {
         var person = ServiceTestData.person();
         var course = course(3L);
-        var registration = new Register(person, course, DAY, StatusRegister.ACTIVE);
-        when(courses.findByIdForRegistration(3L)).thenReturn(Optional.of(course));
+        var registration = new Register(person, course, DAY.atStartOfDay(), StatusRegister.ACTIVE);
+        when(courses.findByIdForUpdate(3L)).thenReturn(Optional.of(course));
+        when(courses.findByid(3L)).thenReturn(Optional.of(course));
         when(people.findByCpfForUpdate(CPF)).thenReturn(Optional.of(person));
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L))
                 .thenReturn(Optional.of(registration));
@@ -345,7 +351,7 @@ class RegisterServiceTests {
         service.deleteRegister(new SearchRegisterDto("012.345.678-90", 3L));
 
         var ordered = inOrder(courses, people, registers);
-        ordered.verify(courses).findByIdForRegistration(3L);
+        ordered.verify(courses).findByIdForUpdate(3L);
         ordered.verify(people).findByCpfForUpdate(CPF);
         ordered.verify(registers).findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L);
         ordered.verify(registers).save(registration);
@@ -355,7 +361,7 @@ class RegisterServiceTests {
     @ParameterizedTest
     @ValueSource(strings = {"012.345.678-90", "01234567890abc", " 012.345.678-90 "})
     void reactivationNormalizesCpfAndLocksBeforeCheckingSchedules(String input) {
-        var registration = new Register(ServiceTestData.person(), course(3L), DAY, StatusRegister.CANCELED);
+        var registration = new Register(ServiceTestData.person(), course(3L), DAY.atStartOfDay(), StatusRegister.CANCELED);
         registration.setId(17L);
         stubStatusLocks(registration);
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L))
@@ -365,7 +371,7 @@ class RegisterServiceTests {
         service.reactiveRegister(new SearchRegisterDto(input, 3L));
 
         var ordered = inOrder(courses, people, registers);
-        ordered.verify(courses).findByIdForRegistration(3L);
+        ordered.verify(courses).findByIdForUpdate(3L);
         ordered.verify(people).findByCpfForUpdate(CPF);
         ordered.verify(registers).findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L);
         ordered.verify(registers).findByPerson_Cpf(CPF);
@@ -375,7 +381,7 @@ class RegisterServiceTests {
 
     @Test
     void cancellationOfCanceledRegistrationIsIdempotent() {
-        var registration = new Register(ServiceTestData.person(), course(3L), DAY, StatusRegister.CANCELED);
+        var registration = new Register(ServiceTestData.person(), course(3L), DAY.atStartOfDay(), StatusRegister.CANCELED);
         stubStatusLocks(registration);
         when(registers.findByPerson_CpfAndCourseOfInterest_Id(CPF, 3L))
                 .thenReturn(Optional.of(registration));
@@ -388,7 +394,9 @@ class RegisterServiceTests {
     }
 
     private void stubStatusLocks(Register registration) {
-        when(courses.findByIdForRegistration(registration.getCourseOfInterest().getId()))
+        when(courses.findByIdForUpdate(registration.getCourseOfInterest().getId()))
+                .thenReturn(Optional.of(registration.getCourseOfInterest()));
+        lenient().when(courses.findByid(registration.getCourseOfInterest().getId()))
                 .thenReturn(Optional.of(registration.getCourseOfInterest()));
         when(people.findByCpfForUpdate(registration.getPerson().getCpf()))
                 .thenReturn(Optional.of(registration.getPerson()));

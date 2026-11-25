@@ -48,7 +48,7 @@ class CourseClassBatchTests {
 
     long createCourse(String name) throws Exception {
         var response = mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("""
-                {"name":"%s","description":"Introdução","start":"2026-10-01","finish":"2026-12-31"}
+                {"name":"%s","description":"Introdução","start":"2026-10-01","finish":"2026-12-31","maximumStudents":20}
                 """.formatted(name))).andExpect(status().isCreated()).andReturn();
         return ((Number) JsonPath.read(response.getResponse().getContentAsString(), "$.id")).longValue();
     }
@@ -164,7 +164,7 @@ class CourseClassBatchTests {
                 """)).andExpect(status().isCreated());
         for (long id : new long[]{courseId, otherId}) {
             mvc.perform(post("/api/register").contentType(APPLICATION_JSON).content("""
-                    {"personCpf":"01234567890","courseOfInterestId":%d,"registerDate":"2026-10-01"}
+                    {"personCpf":"01234567890","courseOfInterestId":%d}
                     """.formatted(id))).andExpect(status().isCreated());
         }
         batch("[\"2026-10-01\",\"2026-10-03\"]", courseId, "08:00", "10:00")

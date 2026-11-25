@@ -85,11 +85,11 @@ class RegisterUtilsTests {
     }
 
     private Register registration(Long courseId, Long registerId, int start, int finish, StatusRegister status) {
-        var course = new Course("Curso de exemplo", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE);
+        var course = new Course("Curso de exemplo", null, DAY, DAY.plusDays(1), StatusCourse.ACTIVE, 20);
         course.setId(courseId);
         course.getCourseClass().add(new CourseClass(DAY, Period.MORNING, LocalTime.of(start, 0),
                 LocalTime.of(finish, 0), course));
-        var registration = new Register(PersonTestData.person(CPF), course, DAY, status);
+        var registration = new Register(PersonTestData.person(CPF), course, DAY.atStartOfDay(), status);
         registration.setId(registerId);
         return registration;
     }

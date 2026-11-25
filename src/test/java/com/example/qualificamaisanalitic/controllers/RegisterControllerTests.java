@@ -47,13 +47,13 @@ class RegisterControllerTests {
         var otherPerson = new Person();
         otherPerson.setCpf("98765432100");
         otherPerson.setFullName("Pessoa B");
-        var course = new Course("Curso A", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
+        var course = new Course("Curso A", null, day, day.plusMonths(1), StatusCourse.ACTIVE, 20);
         course.setId(3L);
-        var otherCourse = new Course("Curso B", null, day, day.plusMonths(1), StatusCourse.ACTIVE);
+        var otherCourse = new Course("Curso B", null, day, day.plusMonths(1), StatusCourse.ACTIVE, 20);
         otherCourse.setId(4L);
-        var active = new Register(person, course, day, StatusRegister.ACTIVE);
+        var active = new Register(person, course, day.atTime(9, 15, 30), StatusRegister.ACTIVE);
         active.setId(17L);
-        var canceled = new Register(otherPerson, otherCourse, day.plusDays(1), StatusRegister.CANCELED);
+        var canceled = new Register(otherPerson, otherCourse, day.plusDays(1).atTime(16, 45, 20), StatusRegister.CANCELED);
         canceled.setId(18L);
         when(registers.findAll()).thenReturn(List.of(active, canceled));
 
@@ -66,12 +66,12 @@ class RegisterControllerTests {
                 .andExpect(jsonPath("$[0].person.fullName").value("Pessoa A"))
                 .andExpect(jsonPath("$[0].courseOfInterest.id").value(3))
                 .andExpect(jsonPath("$[0].courseOfInterest.name").value("Curso A"))
-                .andExpect(jsonPath("$[0].registerDate").value("2026-10-01"))
+                .andExpect(jsonPath("$[0].registerDate").value("2026-10-01T09:15:30"))
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$[1].id").value(18))
                 .andExpect(jsonPath("$[1].person.cpf").value("98765432100"))
                 .andExpect(jsonPath("$[1].courseOfInterest.id").value(4))
-                .andExpect(jsonPath("$[1].registerDate").value("2026-10-02"))
+                .andExpect(jsonPath("$[1].registerDate").value("2026-10-02T16:45:20"))
                 .andExpect(jsonPath("$[1].status").value("CANCELED"));
         verify(registers).findAll();
         verifyNoMoreInteractions(registers);

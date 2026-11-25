@@ -34,8 +34,6 @@ public class Course {
     private StatusCourse statusCourse = StatusCourse.ACTIVE;
     @OneToMany(mappedBy = "course")
     private List<CourseClass> courseClass = new ArrayList<>();
-    private List<Long> maximumStudents = new ArrayList<>();
-    private List<Long> waitList = new ArrayList<>();
     private int maximumStudentsCount;
 
     public Course(String name,@Nullable String description, LocalDate start, LocalDate finish, StatusCourse statusCourse, int maximumStudentsCount) {

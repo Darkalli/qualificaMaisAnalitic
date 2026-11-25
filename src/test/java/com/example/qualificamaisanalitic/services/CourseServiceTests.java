@@ -46,19 +46,33 @@ class CourseServiceTests {
         contextual.registerBean(CourseMapper.class, () -> Mappers.getMapper(CourseMapper.class));
         contextual.registerBean(CourseService.class); contextual.refresh();
         try {
-            contextual.getBean(CourseService.class).addCourse(new AddCourseDto("Java",null,START,START));
+            contextual.getBean(CourseService.class).addCourse(new AddCourseDto("Java",null,START,START, 20));
             assertEquals(1,events.size());
             events.clear();
             doThrow(new IllegalStateException("failed save")).when(repository).save(any());
             assertThrows(IllegalStateException.class, () -> contextual.getBean(CourseService.class)
-                .addCourse(new AddCourseDto("Java",null,START,START)));
+                .addCourse(new AddCourseDto("Java",null,START,START, 20)));
             assertTrue(events.isEmpty());
         } finally { contextual.close(); }
     }
 
     @Test
+    void updatesCapacityAndPreservesItWhenOmittedFromLaterPatch() {
+        var course = new Course("Example course", null, START, START.plusMonths(1), StatusCourse.ACTIVE, 20);
+        course.setId(3L);
+        when(repository.findByid(3L)).thenReturn(Optional.of(course));
+
+        service.updateCourse(new UpdateCourseDto(3L, null, null, null, null, 30));
+        assertEquals(30, course.getMaximumStudentsCount());
+
+        service.updateCourse(new UpdateCourseDto(3L, "Updated course", null, null, null, null));
+        assertEquals(30, course.getMaximumStudentsCount());
+        assertEquals("Updated course", course.getName());
+    }
+
+    @Test
     void createsCourseWithItsDatesAndDescription() {
-        service.addCourse(new AddCourseDto("Informática", "Introdução", START, START.plusMonths(1)));
+        service.addCourse(new AddCourseDto("Informática", "Introdução", START, START.plusMonths(1), 20));
         var capture = ArgumentCaptor.forClass(Course.class);
         verify(repository).save(capture.capture());
         var course = capture.getValue();
@@ -71,12 +85,12 @@ class CourseServiceTests {
 
     @Test
     void partialUpdatePreservesIdentityDatesAndClasses() {
-        var course = new Course("Informática", "Descrição", START, START.plusMonths(1), StatusCourse.ACTIVE);
+        var course = new Course("Informática", "Descrição", START, START.plusMonths(1), StatusCourse.ACTIVE, 20);
         course.setId(3L);
         var courseClass = new CourseClass(START, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         course.getCourseClass().add(courseClass);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
-        service.updateCourse(new UpdateCourseDto(3L, "Informática básica", null, null, null));
+        service.updateCourse(new UpdateCourseDto(3L, "Informática básica", null, null, null, null));
         assertEquals("Informática básica", course.getName());
         assertEquals("Descrição", course.getDescription());
         assertEquals(START, course.getStart());
@@ -88,9 +102,9 @@ class CourseServiceTests {
 
     @Test
     void updatesAllProvidedCourseFields() {
-        var course = new Course("Antigo", null, START, START,StatusCourse.ACTIVE);
+        var course = new Course("Antigo", null, START, START,StatusCourse.ACTIVE, 20);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
-        service.updateCourse(new UpdateCourseDto(3L, "Novo", "Descrição", START.plusDays(1), START.plusMonths(2)));
+        service.updateCourse(new UpdateCourseDto(3L, "Novo", "Descrição", START.plusDays(1), START.plusMonths(2), null));
         assertEquals("Novo", course.getName());
         assertEquals("Descrição", course.getDescription());
         assertEquals(START.plusDays(1), course.getStart());
@@ -102,13 +116,13 @@ class CourseServiceTests {
     void refusesUpdateWhenCourseDoesNotExist() {
         when(repository.findByid(3L)).thenReturn(Optional.empty());
         assertThrows(EntityNotFoundException.class,
-                () -> service.updateCourse(new UpdateCourseDto(3L, "Novo", null, null, null)));
+                () -> service.updateCourse(new UpdateCourseDto(3L, "Novo", null, null, null, null)));
         verify(repository, never()).save(any());
     }
 
     @Test
     void listsAndFindsCoursesIncludingAbsentName() {
-        var course = new Course("Informática", null, START, START,StatusCourse.ACTIVE);
+        var course = new Course("Informática", null, START, START,StatusCourse.ACTIVE, 20);
         when(repository.findAll()).thenReturn(List.of(course));
         when(repository.findByName("Informática")).thenReturn(Optional.of(course));
         when(repository.findByName("Ausente")).thenReturn(Optional.empty());
@@ -119,7 +133,7 @@ class CourseServiceTests {
 
     @Test
     void cancelsTheRequestedCourseWithoutDeletingIt() {
-        var course = new Course("Informática", null, START, START, StatusCourse.ACTIVE);
+        var course = new Course("Informática", null, START, START, StatusCourse.ACTIVE, 20);
         course.setId(3L);
         when(repository.findById(3L)).thenReturn(Optional.of(course));
         service.deleteCourse(3L);
