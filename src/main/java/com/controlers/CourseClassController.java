@@ -53,7 +53,7 @@ public class CourseClassController {
     }
 
     @GetMapping
-    public ResponseEntity<List<CourseClass>> getAllByCourseId(){
+    public ResponseEntity<List<CourseClass>> getAll(){
         return ResponseEntity.ok().body(courseClassService.allClasses());
     }
 
