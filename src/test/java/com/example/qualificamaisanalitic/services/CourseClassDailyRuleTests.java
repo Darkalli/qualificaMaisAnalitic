@@ -1,7 +1,7 @@
 package com.example.qualificamaisanalitic.services;
 
 import com.enums.Period;
-import com.dtos.CourseDtos.AddCourseDto;
+import com.dtos.CourseDtos.CourseDto;
 import com.dtos.courseClassesDtos.AddCourseClassDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
 import com.entities.Course;
@@ -131,7 +131,8 @@ class CourseClassDailyRuleTests {
     }
 
     private Course course(String name) {
-        return courses.addCourse(new AddCourseDto(name, null, DAY, DAY.plusMonths(1), 20));
+        var created = courses.addCourse(new CourseDto(name, null, DAY, DAY.plusMonths(1), 20));
+        return entityManager.find(Course.class, created.id());
     }
 
     private CourseClass addClass(Course course, LocalDate day) {

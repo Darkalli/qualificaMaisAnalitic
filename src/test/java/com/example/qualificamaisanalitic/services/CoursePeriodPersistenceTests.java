@@ -1,6 +1,6 @@
 package com.example.qualificamaisanalitic.services;
 
-import com.dtos.CourseDtos.AddCourseDto;
+import com.dtos.CourseDtos.CourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.entities.Course;
 import com.enums.Period;
@@ -32,9 +32,10 @@ class CoursePeriodPersistenceTests {
     @ParameterizedTest
     @EnumSource(Period.class)
     void storesTheSelectedPeriodAsTextAndReloadsIt(Period period) {
-        var created = courses.addCourse(new AddCourseDto("Curso " + period.name(), null,
+        var created = courses.addCourse(new CourseDto("Curso " + period.name(), null,
                 DAY, DAY.plusMonths(1), period, 20));
-        Long id = created.getId();
+        Long id = created.id();
+        assertNotNull(id);
         entityManager.flush();
         entityManager.clear();
 
@@ -43,14 +44,14 @@ class CoursePeriodPersistenceTests {
         assertEquals(StatusCourse.ACTIVE, saved.getStatusCourse());
         assertEquals(period.name(), jdbc.queryForObject("select period from course where id = ?", String.class, id));
         assertEquals(period, courses.getAllCourses().stream()
-                .filter(course -> course.getId().equals(id)).findFirst().orElseThrow().getPeriod());
+                .filter(course -> course.id().equals(id)).findFirst().orElseThrow().period());
     }
 
     @Test
     void updatesPeriodAndPreservesItWhenAnotherFieldIsChanged() {
-        var created = courses.addCourse(new AddCourseDto("Curso de teste", "Descrição", DAY,
+        var created = courses.addCourse(new CourseDto("Curso de teste", "Descrição", DAY,
                 DAY.plusMonths(1), Period.MORNING, 20));
-        Long id = created.getId();
+        Long id = created.id();
         courses.updateCourse(new UpdateCourseDto(id, null, null, null, null, Period.NIGHT, null));
         entityManager.flush();
         entityManager.clear();
@@ -68,10 +69,11 @@ class CoursePeriodPersistenceTests {
 
     @Test
     void preservesCompatibilityWithRequestsWithoutPeriod() {
-        var created = courses.addCourse(new AddCourseDto("Curso sem período", null, DAY, DAY, 20));
-        Long id = created.getId();
+        var created = courses.addCourse(new CourseDto("Curso sem período", null, DAY, DAY, 20));
+        Long id = created.id();
         entityManager.flush();
         entityManager.clear();
         assertNull(entityManager.find(Course.class, id).getPeriod());
     }
+
 }

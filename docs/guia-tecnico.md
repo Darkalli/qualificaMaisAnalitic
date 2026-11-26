@@ -93,7 +93,7 @@ As rotas abaixo refletem o código atual. Os segmentos repetidos, como `/api/per
 | GET | `/api/person` | Lista pessoas ordenadas por nome e, em empate, ID. | 200 + lista |
 | GET | `/api/person/person/{cpf}` | Busca por CPF, aceitando máscara. | 200 + pessoa |
 | DELETE | `/api/person/person/{id}` | Exclui pelo ID interno da pessoa. | 204 sem corpo |
-| POST | `/api/course` | `AddCourseDto`: nome, descrição, início e fim. | 201 + curso |
+| POST | `/api/course` | `CourseDto`: nome, descrição, início e fim. | 201 + curso |
 | PATCH | `/api/course` | `UpdateCourseDto`: `courseId` e campos a atualizar. | 200 + curso |
 | GET | `/api/course` | Lista cursos. | 200 + lista |
 | GET | `/api/course/course/{name}` | Busca um curso pelo nome exato. | 200 + curso |

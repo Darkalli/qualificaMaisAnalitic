@@ -49,7 +49,10 @@ class CourseClassBatchTests {
     long createCourse(String name) throws Exception {
         var response = mvc.perform(post("/api/course").contentType(APPLICATION_JSON).content("""
                 {"name":"%s","description":"Introdução","start":"2026-10-01","finish":"2026-12-31","maximumStudents":20}
-                """.formatted(name))).andExpect(status().isCreated()).andReturn();
+                """.formatted(name))).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value(name))
+                .andExpect(jsonPath("$.maximumStudents").value(20))
+                .andExpect(jsonPath("$.id").isNumber()).andReturn();
         return ((Number) JsonPath.read(response.getResponse().getContentAsString(), "$.id")).longValue();
     }
 

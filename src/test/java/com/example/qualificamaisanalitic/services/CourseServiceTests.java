@@ -1,7 +1,7 @@
 package com.example.qualificamaisanalitic.services;
 
 import com.enums.Period;
-import com.dtos.CourseDtos.AddCourseDto;
+import com.dtos.CourseDtos.CourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.entities.Course;
 import com.entities.CourseClass;
@@ -39,6 +39,7 @@ class CourseServiceTests {
     }
 
     @Test void crudPublishesChangeOnlyAfterSuccessfulRepositoryOperation() {
+        when(repository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var events = new java.util.ArrayList<Object>();
         var contextual = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
         contextual.addApplicationListener(event -> { if (event instanceof org.springframework.context.PayloadApplicationEvent<?> payload) events.add(payload.getPayload()); });
@@ -46,12 +47,12 @@ class CourseServiceTests {
         contextual.registerBean(CourseMapper.class, () -> Mappers.getMapper(CourseMapper.class));
         contextual.registerBean(CourseService.class); contextual.refresh();
         try {
-            contextual.getBean(CourseService.class).addCourse(new AddCourseDto("Java",null,START,START, 20));
+            contextual.getBean(CourseService.class).addCourse(new CourseDto("Java",null,START,START, 20));
             assertEquals(1,events.size());
             events.clear();
             doThrow(new IllegalStateException("failed save")).when(repository).save(any());
             assertThrows(IllegalStateException.class, () -> contextual.getBean(CourseService.class)
-                .addCourse(new AddCourseDto("Java",null,START,START, 20)));
+                .addCourse(new CourseDto("Java",null,START,START, 20)));
             assertTrue(events.isEmpty());
         } finally { contextual.close(); }
     }
@@ -72,7 +73,10 @@ class CourseServiceTests {
 
     @Test
     void createsCourseWithItsDatesAndDescription() {
-        service.addCourse(new AddCourseDto("Informática", "Introdução", START, START.plusMonths(1), 20));
+        var saved = new Course("Informática", "Introdução", START, START.plusMonths(1), StatusCourse.ACTIVE, 20);
+        saved.setId(3L);
+        when(repository.save(any(Course.class))).thenReturn(saved);
+        var result = service.addCourse(new CourseDto("Informática", "Introdução", START, START.plusMonths(1), 20));
         var capture = ArgumentCaptor.forClass(Course.class);
         verify(repository).save(capture.capture());
         var course = capture.getValue();
@@ -81,6 +85,7 @@ class CourseServiceTests {
         assertEquals("Introdução", course.getDescription());
         assertEquals(START, course.getStart());
         assertEquals(START.plusMonths(1), course.getFinish());
+        assertEquals(new CourseDto(3L, "Informática", "Introdução", START, START.plusMonths(1), null, 20), result);
     }
 
     @Test
@@ -90,13 +95,14 @@ class CourseServiceTests {
         var courseClass = new CourseClass(START, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course);
         course.getCourseClass().add(courseClass);
         when(repository.findByid(3L)).thenReturn(Optional.of(course));
-        service.updateCourse(new UpdateCourseDto(3L, "Informática básica", null, null, null, null));
+        var result = service.updateCourse(new UpdateCourseDto(3L, "Informática básica", null, null, null, null));
         assertEquals("Informática básica", course.getName());
         assertEquals("Descrição", course.getDescription());
         assertEquals(START, course.getStart());
         assertEquals(START.plusMonths(1), course.getFinish());
         assertEquals(3L, course.getId());
         assertEquals(List.of(courseClass), course.getCourseClass());
+        assertEquals(new CourseDto(3L, "Informática básica", "Descrição", START, START.plusMonths(1), null, 20), result);
         verify(repository).save(course);
     }
 
@@ -123,11 +129,13 @@ class CourseServiceTests {
     @Test
     void listsAndFindsCoursesIncludingAbsentName() {
         var course = new Course("Informática", null, START, START,StatusCourse.ACTIVE, 20);
+        course.setId(3L);
+        var expected = new CourseDto(3L, "Informática", null, START, START, null, 20);
         when(repository.findAll()).thenReturn(List.of(course));
-        when(repository.findByName("Informática")).thenReturn(Optional.of(course));
+        when(repository.findByName("Informática")).thenReturn(Optional.of(expected));
         when(repository.findByName("Ausente")).thenReturn(Optional.empty());
-        assertEquals(List.of(course), service.getAllCourses());
-        assertSame(course, service.getCourseByName("Informática"));
+        assertEquals(List.of(expected), service.getAllCourses());
+        assertEquals(expected, service.getCourseByName("Informática"));
         assertThrows(EntityNotFoundException.class, () -> service.getCourseByName("Ausente"));
     }
 

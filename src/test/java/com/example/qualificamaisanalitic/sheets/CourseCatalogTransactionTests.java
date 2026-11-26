@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.*;
 import java.time.LocalDate;
 import java.util.*;
-import static org.junit.jupiter.api.Assertions.*;
+
 import static org.mockito.Mockito.*;
 
 class CourseCatalogTransactionTests {
@@ -34,6 +34,7 @@ class CourseCatalogTransactionTests {
         var repository = mock(CourseRepository.class); var writer = mock(GoogleCourseCatalogWriter.class);
         var p = new SheetsProperties(); p.setCatalogEnabled(true);
         when(repository.findAll()).thenReturn(List.of());
+        when(repository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var course = new Course(); course.setId(1L); course.setName("Java");
         when(repository.findByid(1L)).thenReturn(Optional.of(course));
         when(repository.findById(1L)).thenReturn(Optional.of(course));
@@ -47,7 +48,7 @@ class CourseCatalogTransactionTests {
             var sync = context.getBean(CourseCatalogSync.class); var service = context.getBean(CourseService.class);
             var tx = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
             tx.executeWithoutResult(status -> {
-                service.addCourse(new AddCourseDto("Java",null,LocalDate.of(2026,1,1),LocalDate.of(2026,1,1), 20));
+                service.addCourse(new CourseDto("Java",null,LocalDate.of(2026,1,1),LocalDate.of(2026,1,1), 20));
                 service.updateCourse(new UpdateCourseDto(1L,"Updated",null,null,null, null));
                 service.deleteCourse(1L);
                 sync.flushRequested(); verifyNoInteractions(writer);
@@ -57,7 +58,7 @@ class CourseCatalogTransactionTests {
             verify(writer,times(1)).replace(List.of());
             reset(writer);
             tx.executeWithoutResult(status -> {
-                service.addCourse(new AddCourseDto("Rolled back",null,null,null, 20));
+                service.addCourse(new CourseDto("Rolled back",null,null,null, 20));
                 status.setRollbackOnly();
             });
             sync.flushRequested(); verifyNoInteractions(writer);

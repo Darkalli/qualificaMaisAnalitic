@@ -1,6 +1,6 @@
 package com.example.qualificamaisanalitic.services;
 
-import com.dtos.CourseDtos.AddCourseDto;
+import com.dtos.CourseDtos.CourseDto;
 import com.dtos.courseClassesDtos.AddCourseClassDto;
 import com.dtos.courseClassesDtos.AddCourseClassInBatchDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
@@ -89,6 +89,6 @@ class CourseClassPeriodStatusPersistenceTests {
     }
 
     private Long newCourse() {
-        return courses.addCourse(new AddCourseDto("Curso de teste", null, DAY, DAY.plusMonths(1), 20)).getId();
+        return courses.addCourse(new CourseDto("Curso de teste", null, DAY, DAY.plusMonths(1), 20)).id();
     }
 }

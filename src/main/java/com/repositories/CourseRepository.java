@@ -1,5 +1,6 @@
 package com.repositories;
 
+import com.dtos.CourseDtos.CourseDto;
 import com.entities.Course;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
@@ -21,5 +22,10 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     Optional<Course> getById(long id);
 
-    Optional<Course> findByName(String name);
+    @Query("""
+            select new com.dtos.CourseDtos.CourseDto(
+                c.id, c.name, c.description, c.start, c.finish, c.period, c.statusCourse, c.maximumStudentsCount)
+            from Course c where c.name = :name
+            """)
+    Optional<CourseDto> findByName(String name);
 }

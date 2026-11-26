@@ -1,7 +1,7 @@
 package com.example.qualificamaisanalitic.services;
 
 import com.enums.Period;
-import com.dtos.CourseDtos.AddCourseDto;
+import com.dtos.CourseDtos.CourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.dtos.courseClassesDtos.AddCourseClassDto;
 import com.dtos.courseClassesDtos.UpdateCourseClassDto;
@@ -19,7 +19,6 @@ import com.enums.PresenceStatus;
 import com.example.qualificamaisanalitic.PersonTestData;
 import com.services.*;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityNotFoundException;
 import com.repositories.PersonRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,8 +51,9 @@ class ServicesPersistenceTests {
 
     @Test
     void createsUpdatesQueriesAndDeletesCourseAndClassThroughServices() {
-        courses.addCourse(new AddCourseDto("Curso de teste", "Descrição", DAY, DAY.plusMonths(1), 20));
-        var course = courses.getCourseByName("Curso de teste");
+        courses.addCourse(new CourseDto("Curso de teste", "Descrição", DAY, DAY.plusMonths(1), 20));
+        var created = courses.getCourseByName("Curso de teste");
+        var course = entityManager.find(Course.class, created.id());
         classes.addCourseClass(new AddCourseClassDto(DAY, Period.MORNING, LocalTime.of(8, 0), LocalTime.of(10, 0), course.getId()));
         entityManager.flush();
         entityManager.clear();
@@ -64,10 +64,13 @@ class ServicesPersistenceTests {
         entityManager.flush();
         entityManager.clear();
         var savedCourse = courses.getCourseByName("Curso atualizado");
-        assertEquals(course.getId(), savedCourse.getId());
-        assertEquals("Descrição", savedCourse.getDescription());
-        assertEquals(DAY, savedCourse.getStart());
-        var savedClass = savedCourse.getCourseClass().getFirst();
+        assertEquals(created.id(), savedCourse.id());
+        assertEquals("Curso atualizado", savedCourse.name());
+        assertEquals("Descrição", savedCourse.description());
+        assertEquals(DAY, savedCourse.start());
+        var savedEntity = entityManager.find(Course.class, course.getId());
+        assertEquals(savedCourse.name(), savedEntity.getName());
+        var savedClass = savedEntity.getCourseClass().getFirst();
         assertEquals(courseClass.getId(), savedClass.getId());
         assertEquals(Period.AFTERNOON, savedClass.getSession());
         assertEquals(LocalTime.of(14, 0), savedClass.getStart());
@@ -76,7 +79,8 @@ class ServicesPersistenceTests {
         entityManager.flush();
         entityManager.clear();
         assertEquals(com.enums.StatusClass.CANCELED, entityManager.find(CourseClass.class, courseClass.getId()).getStatusClass());
-        assertEquals(course.getId(), courses.getCourseByName("Curso atualizado").getId());
+        assertEquals(savedCourse, courses.getCourseByName("Curso atualizado"));
+        assertNotNull(entityManager.find(Course.class, course.getId()));
     }
 
     @Test

@@ -83,18 +83,34 @@ class ApiControllerTests {
         long id = id(createCourse("Curso Exemplo"));
         mvc.perform(patch("/api/course").contentType(APPLICATION_JSON)
                         .content("{\"courseId\":" + id + ",\"name\":\"Curso Atualizado\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.maximumStudents").value(20))
+                .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.name").value("Curso Atualizado"))
                 .andExpect(jsonPath("$.description").value("Introdução"))
                 .andExpect(jsonPath("$.start").value("2026-10-01"));
         mvc.perform(get("/api/course/course/{name}", "Curso Atualizado"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));
-        mvc.perform(get("/api/course")).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Curso Atualizado"))
+                .andExpect(jsonPath("$.id").value(id));
+        assertEquals(id, jdbc.queryForObject("select id from course where name = ?", Long.class, "Curso Atualizado"));
+        mvc.perform(get("/api/course")).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(id));
+        mvc.perform(patch("/api/course/{id}", id)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id))
+                .andExpect(jsonPath("$.statusCourse").value("CLOSED"));
+        mvc.perform(get("/api/course/course/{name}", "Curso Atualizado"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statusCourse").value("CLOSED"));
+        assertEquals("CLOSED", jdbc.queryForObject("select status_course from course where id = ?", String.class, id));
+        mvc.perform(patch("/api/course/{id}", id)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id))
+                .andExpect(jsonPath("$.statusCourse").value("ACTIVE"));
         mvc.perform(delete("/api/course/course/{id}", id)).andExpect(status().isNoContent());
         mvc.perform(get("/api/course")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value(id))
+                .andExpect(jsonPath("$[0].name").value("Curso Atualizado"))
                 .andExpect(jsonPath("$[0].statusCourse").value("CANCELED"));
+        mvc.perform(get("/api/course/course/{name}", "Curso Atualizado"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statusCourse").value("CANCELED"));
+        assertEquals("CANCELED", jdbc.queryForObject("select status_course from course where id = ?", String.class, id));
     }
 
     @Test
@@ -114,9 +130,9 @@ class ApiControllerTests {
         mvc.perform(get("/api/courseClass/courseClass/{courseId}", otherId))
                 .andExpect(status().isOk()).andExpect(content().json("[]"));
         mvc.perform(get("/api/course/course/{name}", "Curso com turma"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.courseClass[0].id").value(classId))
-                .andExpect(jsonPath("$.courseClass[0].course.id").value(courseId))
-                .andExpect(jsonPath("$.courseClass[0].course.courseClass").doesNotExist());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Curso com turma"))
+                .andExpect(jsonPath("$.courseClass").doesNotExist());
+        assertEquals(courseId, jdbc.queryForObject("select course_id from course_class where id = ?", Long.class, classId));
         mvc.perform(get("/api/course")).andExpect(status().isOk());
         mvc.perform(delete("/api/courseClass/courseClass/{id}", classId)).andExpect(status().isNoContent());
         mvc.perform(get("/api/courseClass/courseClass/{courseId}", courseId))
@@ -943,4 +959,5 @@ class ApiControllerTests {
     private long id(ResultActions response) throws Exception {
         return ((Number) JsonPath.read(response.andReturn().getResponse().getContentAsString(), "$.id")).longValue();
     }
+
 }

@@ -1,9 +1,8 @@
 package com.controlers;
 
-import com.dtos.CourseDtos.AddCourseDto;
+import com.dtos.CourseDtos.CourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.entities.Course;
-import com.entities.Person;
 import com.services.CourseService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,16 +21,16 @@ public class CourseController {
     }
 
     @PostMapping
-    public ResponseEntity<Course> createCourse(@RequestBody AddCourseDto courseDto){
+    public ResponseEntity<CourseDto> createCourse(@RequestBody CourseDto courseDto){
         return ResponseEntity.status(HttpStatus.CREATED).body(courseService.addCourse(courseDto));
     }
 
     @PatchMapping
-    public ResponseEntity<Course> updateCourse(@RequestBody UpdateCourseDto updateCourseDto){
+    public ResponseEntity<CourseDto> updateCourse(@RequestBody UpdateCourseDto updateCourseDto){
         return ResponseEntity.ok().body(courseService.updateCourse(updateCourseDto));
     }
     @PatchMapping("/{id}")
-    public ResponseEntity<Course> updateCourse(@PathVariable Long id){
+    public ResponseEntity<CourseDto> updateCourse(@PathVariable Long id){
         return ResponseEntity.ok().body(courseService.updateCourseStatus(id));
     }
 
@@ -42,12 +41,12 @@ public class CourseController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Course>> getAllCourses(){
+    public ResponseEntity<List<CourseDto>> getAllCourses(){
         return ResponseEntity.ok().body(courseService.getAllCourses());
     }
 
     @GetMapping("/course/{name}")
-    public ResponseEntity<Course> getCourseByName(@PathVariable String name){
+    public ResponseEntity<CourseDto> getCourseByName(@PathVariable String name){
         return ResponseEntity.ok(courseService.getCourseByName(name));
     }
 

@@ -1,6 +1,6 @@
 package com.services;
 
-import com.dtos.CourseDtos.AddCourseDto;
+import com.dtos.CourseDtos.CourseDto;
 import com.dtos.CourseDtos.UpdateCourseDto;
 import com.entities.Course;
 import com.enums.StatusCourse;
@@ -9,9 +9,11 @@ import com.repositories.CourseRepository;
 import com.sheets.CourseCatalogChanged;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
+import org.checkerframework.checker.units.qual.C;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+
 import static com.utils.ValidationUtils.*;
 
 @Service
@@ -30,7 +32,7 @@ public class CourseService {
     }
 
     @Transactional
-    public Course addCourse (AddCourseDto courseDto){
+    public CourseDto addCourse(CourseDto courseDto) {
         required(courseDto.name(), "name");
         maxLength(courseDto.name(), 255, "name");
         maxLength(courseDto.description(), 255, "description");
@@ -40,10 +42,11 @@ public class CourseService {
         course.setPeriod(courseDto.period());
         Course saved = courseRepository.save(course);
         events.publishEvent(new CourseCatalogChanged());
-        return saved;
+        return new CourseDto(saved);
     }
+
     @Transactional
-    public Course updateCourse (UpdateCourseDto courseDto){
+    public CourseDto updateCourse(UpdateCourseDto courseDto) {
         positiveId(courseDto.courseId(), "courseId");
         Course course = courseRepository.findByid(courseDto.courseId())
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
@@ -56,25 +59,26 @@ public class CourseService {
         dateRange(courseDto.start() != null ? courseDto.start() : course.getStart(),
                 courseDto.finish() != null ? courseDto.finish() : course.getFinish());
         mapper.updateCoursefromDto(courseDto, course);
-        Course saved = courseRepository.save(course);
+        courseRepository.save(course);
         events.publishEvent(new CourseCatalogChanged());
-        return saved;
+        return new CourseDto(course);
     }
 
     @Transactional
-    public Course updateCourseStatus (Long courseId){
+    public CourseDto updateCourseStatus(Long courseId) {
         Course course = courseRepository.findByid(courseId)
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
-        if(course.getStatusCourse() == StatusCourse.ACTIVE){
+        if (course.getStatusCourse() == StatusCourse.ACTIVE) {
             course.setStatusCourse(StatusCourse.CLOSED);
-        }else{
+        } else {
             course.setStatusCourse(StatusCourse.ACTIVE);
         }
-        return courseRepository.save(course);
+        courseRepository.save(course);
+        return new CourseDto(course);
     }
 
     @Transactional
-    public void deleteCourse(Long courseId){
+    public void deleteCourse(Long courseId) {
         positiveId(courseId, "id");
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new EntityNotFoundException("Curso não encontrado"));
@@ -82,11 +86,14 @@ public class CourseService {
         events.publishEvent(new CourseCatalogChanged());
     }
 
-    public List<Course> getAllCourses(){
-        return courseRepository.findAll();
+    public List<CourseDto> getAllCourses() {
+        return courseRepository.findAll().stream()
+                .map(CourseDto::new)
+                .toList();
+
     }
 
-    public Course getCourseByName(String courseName){
+    public CourseDto getCourseByName(String courseName) {
         required(courseName, "name");
         maxLength(courseName, 255, "name");
         return courseRepository.findByName(courseName)

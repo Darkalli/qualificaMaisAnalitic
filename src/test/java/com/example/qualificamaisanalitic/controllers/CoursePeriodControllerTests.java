@@ -20,6 +20,8 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.mockito.Mockito.*;
@@ -57,9 +59,11 @@ class CoursePeriodControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.period").value("AFTERNOON"))
                 .andExpect(jsonPath("$.name").value("Informática"))
+                .andExpect(jsonPath("$.id").value(3L))
                 .andExpect(jsonPath("$.description").value("Introdução"))
                 .andExpect(jsonPath("$.start").value("2026-10-01"))
-                .andExpect(jsonPath("$.statusCourse").value("ACTIVE"));
+                .andExpect(jsonPath("$.maximumStudents").value(20));
+        assertEquals(StatusCourse.ACTIVE, course.getStatusCourse());
     }
 
     @Test
@@ -114,8 +118,14 @@ class CoursePeriodControllerTests {
                 "finish":"2026-11-01", "period":"%s", "maximumStudents":20}
                 """.formatted(period.name())))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(3L))
                 .andExpect(jsonPath("$.name").value("Informática"))
                 .andExpect(jsonPath("$.period").value(period.name()))
-                .andExpect(jsonPath("$.statusCourse").value("ACTIVE"));
+                .andExpect(jsonPath("$.maximumStudents").value(20));
+        var saved = org.mockito.ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(saved.capture());
+        assertEquals(period, saved.getValue().getPeriod());
+        assertEquals(StatusCourse.ACTIVE, saved.getValue().getStatusCourse());
+        assertNotNull(saved.getValue().getId());
     }
 }
